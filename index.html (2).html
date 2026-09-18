@@ -1,0 +1,2088 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IZMA ENVÍOS · Bodega de saldos americanos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --tinta:#16233B; --tinta-2:#48566E; --tinta-3:#7C899C;
+  --kraft:#C98A3C; --kraft-claro:#FBF1E2;
+  --sello:#C62828; --sello-claro:#FCEDED;
+  --verde:#166F53; --verde-claro:#E8F4EF;
+  --fondo:#F1F3F5; --tarjeta:#FFFFFF; --linea:#DDE2E8;
+  --r:10px; --sombra:0 1px 2px rgba(22,35,59,.08), 0 6px 18px rgba(22,35,59,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--fondo);color:var(--tinta);font:400 15px/1.5 Inter,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+h1,h2,h3,.marca,.cifra{font-family:'Barlow Condensed',Inter,sans-serif;letter-spacing:.01em}
+h2{font-size:21px;font-weight:600;margin:0 0 10px}
+h3{font-size:17px;font-weight:600;margin:0 0 6px}
+.num{font-variant-numeric:tabular-nums}
+button,input,select,textarea{font-family:inherit;font-size:15px}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--kraft);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.tope{position:sticky;top:0;z-index:30;background:var(--tinta);color:#fff;box-shadow:var(--sombra)}
+.tope-fila{display:flex;align-items:center;gap:12px;padding:10px 14px;max-width:1080px;margin:0 auto}
+.marca{font-size:26px;font-weight:700;line-height:1;position:relative;padding:0 6px;z-index:0}
+.marca::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:7px;background:var(--kraft);opacity:.9;z-index:-1}
+.marca small{display:block;font:500 11px/1 Inter,sans-serif;letter-spacing:.14em;color:#B9C4D4;padding-top:4px}
+.quien{margin-left:auto;text-align:right;font-size:12px;color:#B9C4D4;line-height:1.3}
+.quien b{display:block;color:#fff;font-size:13px}
+.quien .bolsa{display:inline-block;margin-top:3px;background:rgba(255,255,255,.14);padding:1px 8px;border-radius:999px;color:#fff;font-weight:600}
+.quien .bolsa.deuda{background:var(--sello)}
+.nav{display:flex;gap:6px;overflow-x:auto;padding:0 14px 10px;max-width:1080px;margin:0 auto;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav button{border:1px solid rgba(255,255,255,.22);background:transparent;color:#DCE3EC;padding:7px 13px;border-radius:999px;white-space:nowrap;font-weight:500;font-size:14px}
+.nav button[aria-current="true"]{background:#fff;color:var(--tinta);border-color:#fff}
+.nav .globo{background:var(--sello);color:#fff;border-radius:999px;padding:1px 6px;margin-left:6px;font-size:11px;font-weight:600;font-style:normal}
+main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
+.cinta-demo{background:var(--kraft);color:#3A2607;font-size:12px;font-weight:600;text-align:center;padding:5px 12px}
+
+.tarjeta{background:var(--tarjeta);border:1px solid var(--linea);border-radius:var(--r);padding:14px;box-shadow:var(--sombra)}
+.tarjeta+.tarjeta{margin-top:12px}
+.fila{display:flex;gap:10px;align-items:center}
+.fila.entre{justify-content:space-between}
+.fila.envolver{flex-wrap:wrap}
+.campo{display:block;margin-bottom:12px}
+.campo span{display:block;font-size:13px;color:var(--tinta-2);margin-bottom:5px;font-weight:500}
+.campo input,.campo select,.campo textarea{width:100%;padding:11px 12px;border:1px solid var(--linea);border-radius:8px;background:#fff;color:var(--tinta)}
+.campo textarea{min-height:76px;resize:vertical}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:520px){.dos{grid-template-columns:1fr}}
+.btn{border:0;border-radius:8px;padding:12px 16px;font-weight:600;background:var(--tinta);color:#fff}
+.btn.lleno{width:100%}
+.btn.kraft{background:var(--kraft)}
+.btn.verde{background:var(--verde)}
+.btn.rojo{background:var(--sello)}
+.btn.claro{background:#fff;color:var(--tinta);border:1px solid var(--linea)}
+.btn.chico{padding:7px 11px;font-size:13px;border-radius:7px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.sello{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:#EEF1F5;color:var(--tinta-2)}
+.sello.verde{background:var(--verde-claro);color:var(--verde)}
+.sello.rojo{background:var(--sello-claro);color:var(--sello)}
+.sello.kraft{background:var(--kraft-claro);color:#8A5A15}
+.tenue{color:var(--tinta-3);font-size:13px}
+.vacio{text-align:center;padding:36px 18px;color:var(--tinta-2)}
+.vacio p{margin:6px 0 14px}
+.linea-arriba{border-top:1px solid var(--linea);margin-top:12px;padding-top:12px}
+
+.monedero{background:var(--tinta);color:#fff;border-radius:var(--r);padding:18px;box-shadow:var(--sombra)}
+.monedero .rotulo{font-size:13px;color:#B9C4D4}
+.monedero .grande{font-family:'Barlow Condensed',sans-serif;font-size:46px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.monedero.debe{background:var(--sello)}
+.monedero .fila{margin-top:12px}
+.mov{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--linea)}
+.mov:last-child{border-bottom:0}
+.mov .monto{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mov .monto.mas{color:var(--verde)}
+.mov .monto.menos{color:var(--sello)}
+
+.rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.pieza{background:var(--tarjeta);border:1px solid var(--linea);border-radius:var(--r);overflow:hidden;box-shadow:var(--sombra);display:flex;flex-direction:column}
+.pieza .lienzo{position:relative;aspect-ratio:4/3;background:#E7EBF0;cursor:pointer}
+.pieza .lienzo img,.pieza .lienzo video{width:100%;height:100%;object-fit:cover;display:block}
+.pieza .lienzo .cinta{position:absolute;top:8px;left:8px;background:rgba(22,35,59,.86);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px}
+.pieza .lienzo .mas{position:absolute;bottom:8px;right:8px;background:rgba(22,35,59,.86);color:#fff;font-size:11px;padding:3px 8px;border-radius:999px}
+.pieza .cuerpo{padding:11px 12px 13px;display:flex;flex-direction:column;gap:7px;flex:1}
+.pieza .titulo{font-weight:600;line-height:1.3}
+.precio{font-family:'Barlow Condensed',sans-serif;font-size:27px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.agotado .lienzo{filter:grayscale(1) opacity(.6)}
+.stepper{display:flex;align-items:center;border:1px solid var(--linea);border-radius:8px;overflow:hidden}
+.stepper button{width:34px;height:38px;border:0;background:#fff;font-size:17px;color:var(--tinta)}
+.stepper input{width:42px;height:38px;border:0;border-left:1px solid var(--linea);border-right:1px solid var(--linea);text-align:center;font-variant-numeric:tabular-nums}
+.filtros{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}
+.filtros::-webkit-scrollbar{display:none}
+.filtros button{border:1px solid var(--linea);background:#fff;color:var(--tinta-2);border-radius:999px;padding:7px 13px;white-space:nowrap;font-size:14px}
+.filtros button[aria-current="true"]{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+.buscador{display:flex;gap:8px;margin-bottom:12px}
+.buscador input{flex:1;padding:11px 12px;border:1px solid var(--linea);border-radius:8px}
+
+.reloj{display:inline-flex;align-items:center;gap:6px;background:var(--sello);color:#fff;font-weight:600;font-variant-numeric:tabular-nums;padding:4px 10px;border-radius:999px;font-size:13px}
+.reloj.tibio{background:var(--kraft)}
+.reloj.calmo{background:var(--tinta-2)}
+.renglon{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--linea)}
+.renglon:last-child{border-bottom:0}
+.renglon .mini{width:56px;height:56px;border-radius:8px;object-fit:cover;background:#E7EBF0;flex:none}
+.renglon .crece{flex:1;min-width:0}
+.total{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0}
+.total .cifra{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums}
+.tachado{text-decoration:line-through;color:var(--tinta-3)}
+
+.tablero{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.mosaico{background:var(--tarjeta);border:1px solid var(--linea);border-radius:var(--r);padding:12px 13px}
+.mosaico .cifra{font-size:30px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.mosaico span{display:block;font-size:13px;color:var(--tinta-2)}
+.mosaico.alerta{border-color:var(--sello);background:var(--sello-claro)}
+
+.suelta{border:1.5px dashed var(--kraft);background:var(--kraft-claro);border-radius:var(--r);padding:18px;text-align:center;color:#8A5A15;cursor:pointer;display:block}
+.tiras{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tira{position:relative;width:78px;height:78px;border-radius:8px;overflow:hidden;border:1px solid var(--linea);background:#E7EBF0}
+.tira img,.tira video{width:100%;height:100%;object-fit:cover}
+.tira button{position:absolute;top:2px;right:2px;width:22px;height:22px;border:0;border-radius:50%;background:rgba(22,35,59,.85);color:#fff;font-size:13px;line-height:1;padding:0}
+.barra{height:5px;background:var(--linea);border-radius:999px;overflow:hidden;margin-top:10px}
+.barra i{display:block;height:100%;background:var(--kraft);width:0;transition:width .2s}
+.evidencia{width:74px;height:74px;object-fit:cover;border-radius:8px;border:1px solid var(--linea);cursor:pointer}
+
+.acceso{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:var(--tinta)}
+.acceso .caja{width:100%;max-width:410px;background:#fff;border-radius:14px;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.28)}
+.acceso .marca{color:var(--tinta);font-size:38px;display:inline-block;margin-bottom:16px}
+.pestanas{display:flex;gap:6px;margin-bottom:16px}
+.pestanas button{flex:1;border:1px solid var(--linea);background:#fff;padding:9px;border-radius:8px;font-weight:600;color:var(--tinta-2)}
+.pestanas button[aria-current="true"]{background:var(--tinta);color:#fff;border-color:var(--tinta)}
+
+#avisos{position:fixed;left:14px;right:14px;bottom:16px;z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.aviso{background:var(--tinta);color:#fff;padding:12px 16px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:460px;font-size:14px}
+.aviso.mal{background:var(--sello)}
+.aviso.bien{background:var(--verde)}
+#capa{position:fixed;inset:0;z-index:70;background:rgba(22,35,59,.55);display:none;align-items:flex-end;justify-content:center}
+#capa.abierta{display:flex}
+#capa .hoja{background:#fff;width:100%;max-width:520px;border-radius:14px 14px 0 0;padding:18px;max-height:88vh;overflow:auto}
+@media (min-width:640px){#capa{align-items:center;padding:20px}#capa .hoja{border-radius:14px}}
+.mensaje{padding:11px 13px;border-radius:8px;font-size:14px;margin-bottom:12px}
+.mensaje.info{background:#EEF2F7;color:var(--tinta-2)}
+.mensaje.kraft{background:var(--kraft-claro);color:#8A5A15}
+.mensaje.rojo{background:var(--sello-claro);color:var(--sello)}
+.mensaje.verde{background:var(--verde-claro);color:var(--verde)}
+.cargando{text-align:center;padding:40px;color:var(--tinta-3)}
+</style>
+</head>
+<body>
+
+<div class="acceso" id="acceso">
+  <div class="caja">
+    <div class="marca">IZMA<small>ENVÍOS · SALDOS AMERICANOS</small></div>
+    <div class="pestanas">
+      <button data-pestana="entrar" aria-current="true">Entrar</button>
+      <button data-pestana="solicitar">Solicitar acceso</button>
+    </div>
+    <form id="form-entrar">
+      <label class="campo"><span>Usuario que te dio IZMA</span>
+        <input name="usuario" autocomplete="username" autocapitalize="none" required></label>
+      <label class="campo"><span>PIN</span>
+        <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" required></label>
+      <button class="btn lleno" type="submit">Entrar</button>
+      <p class="tenue" style="margin:14px 0 0">¿No tienes usuario? Solicita acceso y IZMA te lo manda por WhatsApp.</p>
+      <div id="claves-demo"></div>
+    </form>
+    <form id="form-solicitar" hidden>
+      <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
+      <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
+      <label class="campo"><span>WhatsApp</span><input name="telefono" inputmode="tel" required></label>
+      <div class="dos">
+        <label class="campo"><span>Ciudad</span><input name="ciudad"></label>
+        <label class="campo"><span>Tipo de cliente</span>
+          <select name="tipo"><option value="local">Local (recojo en bodega)</option>
+          <option value="foraneo">Foráneo (por paquetería)</option></select></label>
+      </div>
+      <label class="campo" data-solo-foraneo hidden><span>Paquetería de tu preferencia</span><input name="paqueteria" placeholder="Estafeta, Castores, Tufesa…"></label>
+      <label class="campo" data-solo-foraneo hidden><span>Dirección de envío</span><textarea name="direccion"></textarea></label>
+      <label class="campo"><span>¿Quién te recomendó o cómo nos encontraste?</span><input name="referencia"></label>
+      <button class="btn lleno kraft" type="submit">Enviar solicitud</button>
+    </form>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header class="tope">
+    <div class="cinta-demo" id="cinta-demo" hidden>Modo demostración · los datos se guardan solo en este dispositivo</div>
+    <div class="tope-fila">
+      <div class="marca">IZMA<small>ENVÍOS</small></div>
+      <div class="quien" id="quien"></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+  </header>
+  <main id="vista"><div class="cargando">Cargando…</div></main>
+</div>
+
+<div id="avisos"></div>
+<div id="capa"><div class="hoja" id="hoja"></div></div>
+
+<script>
+/* =======================================================
+   1. CONFIGURACIÓN
+   MODO_DEMO = true  → todo corre en este navegador, sin Supabase.
+   MODO_DEMO = false → usa SUPABASE_URL y SUPABASE_ANON.
+   ======================================================= */
+const MODO_DEMO     = true;
+const SUPABASE_URL  = "https://TU-PROYECTO.supabase.co";
+const SUPABASE_ANON = "TU_ANON_KEY";
+const BUCKET = "izma";
+
+/* ===================== 2. utilidades ===================== */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const dinero = n => "$" + Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fecha = s => new Date(s).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+const ahora = () => new Date().toISOString();
+const redondea = n => Math.round(Number(n || 0) * 100) / 100;
+
+function aviso(texto, tipo = "") {
+  const d = document.createElement("div");
+  d.className = "aviso " + tipo;
+  d.textContent = texto;
+  $("#avisos").appendChild(d);
+  setTimeout(() => d.remove(), 4200);
+}
+function hoja(html) { $("#hoja").innerHTML = html; $("#capa").classList.add("abierta"); }
+function cerrarHoja() { $("#capa").classList.remove("abierta"); $("#hoja").innerHTML = ""; }
+$("#capa").addEventListener("click", e => { if (e.target.id === "capa") cerrarHoja(); });
+function verImagen(url) {
+  hoja('<img src="' + esc(url) + '" alt="" style="width:100%;border-radius:10px;margin-bottom:12px">' +
+    '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
+}
+
+/* SHA-256 en JS puro: funciona igual abriendo el archivo desde el disco,
+   desde el celular o desde un servidor. Da el mismo hash que digest() de Postgres. */
+const K256 = [
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+
+function sha256(texto) {
+  const rr = (v, a) => (v >>> a) | (v << (32 - a));
+  const bytes = [];
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto.charCodeAt(i);
+    if (c < 128) bytes.push(c);
+    else if (c < 2048) bytes.push(192 | (c >> 6), 128 | (c & 63));
+    else if (c < 55296 || c >= 57344) bytes.push(224 | (c >> 12), 128 | ((c >> 6) & 63), 128 | (c & 63));
+    else {
+      i++;
+      const cp = 65536 + (((c & 1023) << 10) | (texto.charCodeAt(i) & 1023));
+      bytes.push(240 | (cp >> 18), 128 | ((cp >> 12) & 63), 128 | ((cp >> 6) & 63), 128 | (cp & 63));
+    }
+  }
+  const bits = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 0; i < 4; i++) bytes.push(0);
+  bytes.push((bits >>> 24) & 255, (bits >>> 16) & 255, (bits >>> 8) & 255, bits & 255);
+
+  let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const w = new Array(64);
+  for (let i = 0; i < bytes.length; i += 64) {
+    for (let j = 0; j < 16; j++)
+      w[j] = (bytes[i + 4 * j] << 24) | (bytes[i + 4 * j + 1] << 16) | (bytes[i + 4 * j + 2] << 8) | bytes[i + 4 * j + 3];
+    for (let j = 16; j < 64; j++) {
+      const s0 = rr(w[j - 15], 7) ^ rr(w[j - 15], 18) ^ (w[j - 15] >>> 3);
+      const s1 = rr(w[j - 2], 17) ^ rr(w[j - 2], 19) ^ (w[j - 2] >>> 10);
+      w[j] = (w[j - 16] + s0 + w[j - 7] + s1) | 0;
+    }
+    let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+    for (let j = 0; j < 64; j++) {
+      const S1 = rr(e, 6) ^ rr(e, 11) ^ rr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + K256[j] + w[j]) | 0;
+      const S0 = rr(a, 2) ^ rr(a, 13) ^ rr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H = [(H[0]+a)|0,(H[1]+b)|0,(H[2]+c)|0,(H[3]+d)|0,(H[4]+e)|0,(H[5]+f)|0,(H[6]+g)|0,(H[7]+h)|0];
+  }
+  return H.map(x => (x >>> 0).toString(16).padStart(8, "0")).join("");
+}
+const hashPin = (usuario, pin) => sha256(String(usuario).trim().toLowerCase() + ":" + String(pin).trim());
+
+/* localStorage protegido: en modo privado o desde el disco puede estar bloqueado */
+const almacen = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch {} }
+};
+
+/* ===================== 3. capa de datos ===================== */
+async function rpc(fn, args = {}) {
+  if (MODO_DEMO) {
+    if (!BD) await cargarBD();
+    await new Promise(r => setTimeout(r, 60));
+    try {
+      if (!LOCAL[fn]) throw new Error("Esa función todavía no existe en modo demo: " + fn);
+      return LOCAL[fn](args);
+    } catch (err) {
+      if (/SESION_INVALIDA/.test(err.message)) { salirLocal(); throw new Error("Tu sesión expiró. Entra otra vez."); }
+      if (/SIN_PERMISO/.test(err.message)) throw new Error("No tienes permiso para eso");
+      throw err;
+    }
+  }
+  const r = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON, Authorization: "Bearer " + SUPABASE_ANON },
+    body: JSON.stringify(args)
+  });
+  const texto = await r.text();
+  let dato = null;
+  try { dato = texto ? JSON.parse(texto) : null; } catch { dato = texto; }
+  if (!r.ok) {
+    const msj = (dato && dato.message) || "Error de conexión";
+    if (/SESION_INVALIDA/.test(msj)) { salirLocal(); throw new Error("Tu sesión expiró. Entra otra vez."); }
+    if (/SIN_PERMISO/.test(msj)) throw new Error("No tienes permiso para eso");
+    throw new Error(msj);
+  }
+  return dato;
+}
+
+async function comprimir(file, max, calidad) {
+  if (!file.type.startsWith("image/")) return file;
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) return file;
+  const escala = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bitmap.width * escala);
+  c.height = Math.round(bitmap.height * escala);
+  c.getContext("2d").drawImage(bitmap, 0, 0, c.width, c.height);
+  const blob = await new Promise(res => c.toBlob(res, "image/jpeg", calidad));
+  return blob ? new File([blob], "foto.jpg", { type: "image/jpeg" }) : file;
+}
+const leerDataURL = f => new Promise((res, rej) => {
+  const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f);
+});
+async function subir(file) {
+  if (MODO_DEMO) {
+    if (file.type.startsWith("video/")) {
+      if (file.size > 3.5 * 1024 * 1024) throw new Error("En modo demo los videos deben pesar menos de 3.5 MB");
+      return { url: await leerDataURL(file), tipo: "video" };
+    }
+    const chico = await comprimir(file, 760, 0.6);
+    return { url: await leerDataURL(chico), tipo: "foto" };
+  }
+  const listo = await comprimir(file, 1400, 0.82);
+  const ext = (listo.name.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
+  const ruta = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
+  const r = await fetch(SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/" + ruta, {
+    method: "POST",
+    headers: { apikey: SUPABASE_ANON, Authorization: "Bearer " + SUPABASE_ANON, "Content-Type": listo.type || "application/octet-stream" },
+    body: listo
+  });
+  if (!r.ok) throw new Error("No se pudo subir el archivo");
+  return { url: SUPABASE_URL + "/storage/v1/object/public/" + BUCKET + "/" + ruta, tipo: listo.type.startsWith("video") ? "video" : "foto" };
+}
+
+/* ===================== 4. backend de prueba ===================== */
+const LLAVE_DEMO = "izma_demo_v2";
+let BD = null;
+
+function guardarBD() {
+  if (!almacen.set(LLAVE_DEMO, JSON.stringify(BD))) { aviso("Ya no caben más fotos de prueba en este navegador. Reinicia los datos en Ajustes.", "mal"); }
+}
+function fotoDemo(texto, color) {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">' +
+    '<rect width="400" height="300" fill="' + color + '"/>' +
+    '<text x="200" y="158" font-family="sans-serif" font-size="20" fill="#ffffff" text-anchor="middle">' + texto + '</text></svg>';
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+async function semillaBD() {
+  const nuevo = async (usuario, pin, nombre, rol, extra = {}) => Object.assign({
+    id: uid(), usuario, pin_hash: await hashPin(usuario, pin), nombre, rol, estado: "activo",
+    tipo_cliente: null, telefono: "", ciudad: "", direccion: "", paqueteria: "",
+    saldo: 0, limite_credito: 0, notas: "", creado_en: ahora(), ultimo_acceso: null
+  }, extra);
+
+  const admin = await nuevo("admin", "1234", "Administración IZMA", "admin");
+  const vend  = await nuevo("vendedor", "1234", "Compras Tijuana", "vendedor", { telefono: "6641112233" });
+  const maria = await nuevo("maria", "1234", "María Sánchez", "cliente",
+    { tipo_cliente: "local", telefono: "6645550011", ciudad: "Tijuana", saldo: 1200, limite_credito: 500 });
+  const jose  = await nuevo("jose", "1234", "José Ruiz", "cliente",
+    { tipo_cliente: "foraneo", telefono: "9615550022", ciudad: "Tuxtla Gutiérrez", saldo: 350, limite_credito: 0,
+      paqueteria: "Castores", direccion: "Av. Central 123, col. Centro, Tuxtla" });
+
+  const prod = (titulo, categoria, precio, cantidad, origen, color, quien, descripcion = "") => ({
+    id: uid(), titulo, descripcion, categoria, precio, cantidad, disponible: cantidad, vendidos: 0,
+    origen, media: [{ url: fotoDemo(titulo, color), tipo: "foto" }],
+    vendedor_id: quien.id, estado: cantidad ? "activo" : "agotado", creado_en: ahora()
+  });
+
+  const mov = (u, tipo, monto, concepto) => ({
+    id: uid(), usuario_id: u.id, tipo, monto, concepto, ref: "", saldo: u.saldo, creado_en: ahora()
+  });
+
+  return {
+    config: {
+      minutos_apartado: 3,
+      tope_transferencia: 499,
+      retiro_min: 500, retiro_max: 6000, retiro_multiplo: 50,
+      banco_retiro: "BBVA Bancomer",
+      banco_nombre: "BBVA", banco_beneficiario: "IZMA ENVÍOS",
+      banco_clabe: "012180012345678901", banco_tarjeta: "4152 3138 0000 0000",
+      whatsapp_pedidos: "526641234567",
+      aviso: "Llegó carga nueva de bodega Otay. Lo apartado se libera en 3 minutos."
+    },
+    usuarios: [admin, vend, maria, jose],
+    sesiones: [], folio: 0,
+    solicitudes: [{
+      id: uid(), nombre: "Brenda Martínez", telefono: "9611234567", ciudad: "Tonalá",
+      tipo_cliente: "foraneo", paqueteria: "Castores", direccion: "Calle 5 de Mayo 44, Tonalá",
+      referencia: "Me recomendó María", estado: "pendiente", motivo: "", usuario_dado: "",
+      creada_en: ahora(), resuelta_en: null
+    }],
+    productos: [
+      prod("Tenis Nike dama surtidos", "Calzado", 450, 4, "Bodega Otay", "#2F4B7C", vend, "Tallas 23 a 26, seminuevos primera"),
+      prod("Chamarras Columbia", "Ropa", 780, 2, "Tienda Sánchez Taboada", "#3E6B5B", vend, "Caballero, tallas M y L"),
+      prod("Bocina JBL Flip", "Electrónica", 1290, 3, "Bodega Otay", "#7A4B2A", vend, "Probadas, con cable"),
+      prod("Caja de juguetes surtidos", "Juguetes", 320, 8, "Bodega La Mesa", "#8A5A15", vend),
+      prod("Licuadora Ninja", "Hogar", 950, 1, "Bodega IZMA", "#4A4A6A", admin, "Vaso completo"),
+      prod("Tenis niño Skechers", "Calzado", 380, 0, "Bodega La Mesa", "#5C6270", vend)
+    ],
+    apartados: [], pedidos: [], items: [], abonos: [],
+    movimientos: [mov(maria, "ajuste", 1200, "Saldo a favor inicial"), mov(jose, "ajuste", 350, "Saldo a favor inicial")]
+  };
+}
+async function cargarBD() {
+  try { BD = JSON.parse(almacen.get(LLAVE_DEMO)); } catch { BD = null; }
+  if (!BD || !BD.usuarios) { BD = await semillaBD(); guardarBD(); }
+}
+async function reiniciarBD() { almacen.del(LLAVE_DEMO); BD = await semillaBD(); guardarBD(); }
+
+const uJson = u => ({
+  id: u.id, usuario: u.usuario, nombre: u.nombre, rol: u.rol, tipo_cliente: u.tipo_cliente,
+  telefono: u.telefono, ciudad: u.ciudad, direccion: u.direccion, paqueteria: u.paqueteria,
+  saldo: u.saldo, limite_credito: u.limite_credito
+});
+function usuarioDe(token) {
+  const s = BD.sesiones.find(x => x.token === token);
+  if (!s) return null;
+  const u = BD.usuarios.find(x => x.id === s.usuario_id);
+  return u && u.estado === "activo" ? u : null;
+}
+function exige(token, roles) {
+  const u = usuarioDe(token);
+  if (!u) throw new Error("SESION_INVALIDA");
+  if (roles && !roles.includes(u.rol)) throw new Error("SIN_PERMISO");
+  return u;
+}
+function liberar() {
+  const t = Date.now();
+  BD.apartados.filter(a => a.estado === "activo" && new Date(a.expira_en) <= t).forEach(a => {
+    const p = BD.productos.find(x => x.id === a.producto_id);
+    if (p) { p.disponible += a.cantidad; if (p.estado === "agotado") p.estado = "activo"; }
+    a.estado = "expirado";
+  });
+  BD.abonos.filter(b => b.estado === "pendiente" && b.metodo === "retiro_sin_tarjeta" && b.vence_en && new Date(b.vence_en) <= t)
+    .forEach(b => b.estado = "vencido");
+  guardarBD();
+}
+function movimiento(u, tipo, monto, concepto, ref) {
+  u.saldo = redondea(u.saldo + monto);
+  BD.movimientos.push({ id: uid(), usuario_id: u.id, tipo, monto: redondea(monto), concepto,
+                        ref: ref || "", saldo: u.saldo, creado_en: ahora() });
+}
+const apartadasDe = id => BD.apartados.filter(a => a.estado === "activo" && a.producto_id === id).reduce((s, a) => s + a.cantidad, 0);
+
+const LOCAL = {
+  login({ p_usuario, p_pin_hash }) {
+    const u = BD.usuarios.find(x => x.usuario.toLowerCase() === String(p_usuario).trim().toLowerCase() && x.pin_hash === p_pin_hash);
+    if (!u) return { ok: false, motivo: "Usuario o PIN incorrecto" };
+    if (u.estado !== "activo") return { ok: false, motivo: "Tu cuenta está suspendida. Escríbele a IZMA." };
+    const token = uid() + uid();
+    BD.sesiones.push({ token, usuario_id: u.id });
+    u.ultimo_acceso = ahora();
+    guardarBD();
+    return { ok: true, token, usuario: uJson(u), config: Object.assign({}, BD.config) };
+  },
+  sesion({ p_token }) {
+    const u = usuarioDe(p_token);
+    return u ? { ok: true, usuario: uJson(u), config: Object.assign({}, BD.config) } : { ok: false };
+  },
+  salir({ p_token }) { BD.sesiones = BD.sesiones.filter(s => s.token !== p_token); guardarBD(); return { ok: true }; },
+  cambiar_pin({ p_token, p_pin_hash_nuevo }) { exige(p_token).pin_hash = p_pin_hash_nuevo; guardarBD(); return { ok: true }; },
+  crear_solicitud(a) {
+    if (!String(a.p_nombre || "").trim() || !String(a.p_telefono || "").trim())
+      return { ok: false, motivo: "Falta nombre o WhatsApp" };
+    if (BD.solicitudes.some(s => s.telefono === String(a.p_telefono).trim() && s.estado === "pendiente"))
+      return { ok: false, motivo: "Ya tienes una solicitud en revisión con ese número" };
+    BD.solicitudes.push({
+      id: uid(), nombre: a.p_nombre.trim(), telefono: String(a.p_telefono).trim(), ciudad: a.p_ciudad || "",
+      tipo_cliente: a.p_tipo === "foraneo" ? "foraneo" : "local", paqueteria: a.p_paqueteria || "",
+      direccion: a.p_direccion || "", referencia: a.p_referencia || "", estado: "pendiente",
+      motivo: "", usuario_dado: "", creada_en: ahora(), resuelta_en: null
+    });
+    guardarBD();
+    return { ok: true };
+  },
+
+  /* ---- catálogo y apartados ---- */
+  catalogo({ p_token, p_busqueda, p_categoria }) {
+    const u = exige(p_token);
+    liberar();
+    const q = String(p_busqueda || "").toLowerCase();
+    const items = BD.productos.filter(p => p.estado !== "oculto")
+      .filter(p => !p_categoria || p.categoria === p_categoria)
+      .filter(p => !q || (p.titulo + " " + p.descripcion + " " + p.categoria).toLowerCase().includes(q))
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(p => Object.assign({}, p, {
+        vendedor: (BD.usuarios.find(v => v.id === p.vendedor_id) || {}).nombre || "IZMA",
+        mio: BD.apartados.filter(a => a.estado === "activo" && a.producto_id === p.id && a.usuario_id === u.id)
+                         .reduce((s, a) => s + a.cantidad, 0)
+      }));
+    const categorias = [...new Set(BD.productos.filter(p => p.estado !== "oculto").map(p => p.categoria))];
+    return { ok: true, items, categorias, saldo: u.saldo, config: Object.assign({}, BD.config) };
+  },
+  apartar({ p_token, p_producto, p_cantidad }) {
+    const u = exige(p_token);
+    if (u.rol !== "cliente") return { ok: false, motivo: "Solo los clientes autorizados pueden apartar" };
+    liberar();
+    const q = Math.max(1, parseInt(p_cantidad || 1, 10));
+    const p = BD.productos.find(x => x.id === p_producto);
+    if (!p) return { ok: false, motivo: "Ese producto ya no existe" };
+    if (p.estado !== "activo") return { ok: false, motivo: "Ese producto ya no está disponible" };
+    if (p.disponible < q)
+      return { ok: false, motivo: p.disponible === 0 ? "Alguien más lo apartó primero" : "Solo quedan " + p.disponible };
+    p.disponible -= q;
+    if (p.disponible === 0) p.estado = "agotado";
+    const mins = BD.config.minutos_apartado;
+    const expira = new Date(Date.now() + mins * 60000).toISOString();
+    const ya = BD.apartados.find(a => a.estado === "activo" && a.producto_id === p.id && a.usuario_id === u.id);
+    if (ya) { ya.cantidad += q; ya.expira_en = expira; }
+    else BD.apartados.push({ id: uid(), producto_id: p.id, usuario_id: u.id, pedido_id: null,
+                             cantidad: q, expira_en: expira, estado: "activo", creado_en: ahora() });
+    guardarBD();
+    return { ok: true, expira_en: expira, minutos: mins };
+  },
+  soltar({ p_token, p_apartado }) {
+    const u = exige(p_token);
+    const a = BD.apartados.find(x => x.id === p_apartado && x.usuario_id === u.id && x.estado === "activo");
+    if (a) {
+      const p = BD.productos.find(x => x.id === a.producto_id);
+      if (p) { p.disponible += a.cantidad; if (p.estado === "agotado") p.estado = "activo"; }
+      a.estado = "cancelado";
+      guardarBD();
+    }
+    return { ok: true };
+  },
+  renovar_carrito({ p_token }) {
+    const u = exige(p_token);
+    liberar();
+    const expira = new Date(Date.now() + BD.config.minutos_apartado * 60000).toISOString();
+    BD.apartados.filter(a => a.usuario_id === u.id && a.estado === "activo").forEach(a => a.expira_en = expira);
+    guardarBD();
+    return { ok: true };
+  },
+  carrito({ p_token }) {
+    const u = exige(p_token);
+    liberar();
+    const items = BD.apartados.filter(a => a.usuario_id === u.id && a.estado === "activo").map(a => {
+      const p = BD.productos.find(x => x.id === a.producto_id) || {};
+      return { apartado: a.id, producto: a.producto_id, titulo: p.titulo, precio: p.precio,
+               cantidad: a.cantidad, importe: p.precio * a.cantidad, expira_en: a.expira_en, media: p.media };
+    });
+    return { ok: true, items, total: redondea(items.reduce((s, i) => s + i.importe, 0)),
+             saldo: u.saldo, limite: u.limite_credito, config: Object.assign({}, BD.config) };
+  },
+  confirmar_pedido({ p_token, p_envio, p_direccion, p_paqueteria, p_notas }) {
+    const u = exige(p_token);
+    if (u.rol !== "cliente") return { ok: false, motivo: "Solo los clientes hacen pedidos" };
+    liberar();
+    const vivos = BD.apartados.filter(a => a.usuario_id === u.id && a.estado === "activo");
+    const total = redondea(vivos.reduce((s, a) => s + (BD.productos.find(p => p.id === a.producto_id) || {}).precio * a.cantidad, 0));
+    if (!total) return { ok: false, motivo: "Tu carrito está vacío o se venció el apartado" };
+    const tope = redondea(u.saldo + (u.limite_credito || 0));
+    if (total > tope)
+      return { ok: false, motivo: "Te faltan " + dinero(total - tope) + " de saldo. Abona y vuelve a confirmar.", falta: redondea(total - tope) };
+    if (u.tipo_cliente === "foraneo" && !String(p_direccion || u.direccion || "").trim())
+      return { ok: false, motivo: "Necesitamos tu dirección de envío" };
+
+    BD.folio += 1;
+    const f = new Date();
+    const folio = "IZ" + String(f.getFullYear()).slice(2) + String(f.getMonth() + 1).padStart(2, "0") +
+                  String(f.getDate()).padStart(2, "0") + String(BD.folio).padStart(4, "0");
+    const ped = {
+      id: uid(), folio, usuario_id: u.id, total, envio: p_envio || (u.tipo_cliente === "local" ? "recoge" : "por_cobrar"),
+      estado: "preparando", paqueteria: (p_paqueteria || u.paqueteria || "").trim(),
+      direccion: (p_direccion || u.direccion || "").trim(), guia: "",
+      notas: p_notas || "", notas_izma: "", creado_en: ahora(), actualizado_en: ahora()
+    };
+    BD.pedidos.push(ped);
+    vivos.forEach(a => {
+      const p = BD.productos.find(x => x.id === a.producto_id);
+      BD.items.push({ id: uid(), pedido_id: ped.id, producto_id: p.id, titulo: p.titulo,
+                      precio: p.precio, cantidad: a.cantidad, estado: "asignado", motivo: "" });
+      p.vendidos += a.cantidad;
+      a.estado = "confirmado"; a.pedido_id = ped.id;
+    });
+    movimiento(u, "compra", -total, "Compra " + folio, folio);
+    guardarBD();
+    return { ok: true, folio, pedido: ped.id, total, saldo: u.saldo, config: Object.assign({}, BD.config) };
+  },
+  mis_pedidos({ p_token }) {
+    const u = exige(p_token);
+    const pedidos = BD.pedidos.filter(p => p.usuario_id === u.id)
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(p => Object.assign({}, p, { items: BD.items.filter(i => i.pedido_id === p.id) }));
+    return { ok: true, pedidos, saldo: u.saldo, config: Object.assign({}, BD.config) };
+  },
+  actualizar_mis_datos({ p_token, p_telefono, p_ciudad, p_direccion, p_paqueteria }) {
+    const u = exige(p_token);
+    Object.assign(u, { telefono: p_telefono, ciudad: p_ciudad, direccion: p_direccion, paqueteria: p_paqueteria });
+    guardarBD();
+    return { ok: true, usuario: uJson(u) };
+  },
+
+  /* ---- monedero: saldo, abonos ---- */
+  mi_saldo({ p_token }) {
+    const u = exige(p_token);
+    liberar();
+    return {
+      ok: true, saldo: u.saldo, limite: u.limite_credito,
+      abonos: BD.abonos.filter(b => b.usuario_id === u.id).sort((a, b) => b.creado_en.localeCompare(a.creado_en)).slice(0, 30),
+      movimientos: BD.movimientos.filter(m => m.usuario_id === u.id).sort((a, b) => b.creado_en.localeCompare(a.creado_en)).slice(0, 40),
+      config: Object.assign({}, BD.config)
+    };
+  },
+  crear_abono({ p_token, p_datos }) {
+    const u = exige(p_token);
+    if (u.rol !== "cliente") return { ok: false, motivo: "Solo los clientes registran abonos" };
+    const c = BD.config;
+    const d = p_datos || {};
+    const monto = redondea(d.monto);
+    if (!monto || monto <= 0) return { ok: false, motivo: "Pon el monto del depósito" };
+    if (!d.evidencia) return { ok: false, motivo: "Sube la foto del comprobante" };
+
+    if (d.metodo === "transferencia") {
+      if (monto >= c.tope_transferencia)
+        return { ok: false, motivo: "Las transferencias deben ser menores a " + dinero(c.tope_transferencia) + ". Usa retiro sin tarjeta." };
+      if (!String(d.referencia || "").trim()) return { ok: false, motivo: "Pon la referencia o clave de rastreo" };
+    } else if (d.metodo === "retiro_sin_tarjeta") {
+      if (monto < c.retiro_min) return { ok: false, motivo: "El retiro sin tarjeta es desde " + dinero(c.retiro_min) };
+      if (monto > c.retiro_max) return { ok: false, motivo: "Máximo " + dinero(c.retiro_max) + " por retiro" };
+      if (monto % c.retiro_multiplo !== 0) return { ok: false, motivo: "El monto debe ser múltiplo de $" + c.retiro_multiplo };
+      if (!String(d.codigo || "").trim()) return { ok: false, motivo: "Falta la clave de retiro" };
+      if (!d.vence_en || new Date(d.vence_en) <= new Date())
+        return { ok: false, motivo: "Pon hasta qué hora se puede retirar" };
+    } else return { ok: false, motivo: "Método no válido" };
+
+    BD.abonos.push({
+      id: uid(), usuario_id: u.id, metodo: d.metodo, monto,
+      banco: d.metodo === "retiro_sin_tarjeta" ? c.banco_retiro : (d.banco || ""),
+      referencia: d.referencia || "", codigo: d.codigo || "", celular: d.celular || "",
+      vence_en: d.vence_en || null, evidencia: d.evidencia, nota: d.nota || "",
+      estado: "pendiente", nota_izma: "", monto_cobrado: null,
+      creado_en: ahora(), resuelto_en: null
+    });
+    guardarBD();
+    return { ok: true };
+  },
+  cancelar_abono({ p_token, p_abono }) {
+    const u = exige(p_token);
+    const b = BD.abonos.find(x => x.id === p_abono && x.usuario_id === u.id && x.estado === "pendiente");
+    if (b) { b.estado = "cancelado"; b.resuelto_en = ahora(); guardarBD(); }
+    return { ok: true };
+  },
+
+  /* ---- vendedor ---- */
+  publicar_producto({ p_token, p_datos }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    if (!String(p_datos.titulo || "").trim()) return { ok: false, motivo: "Ponle un nombre al producto" };
+    const cant = Math.max(1, parseInt(p_datos.cantidad || 1, 10));
+    BD.productos.push({
+      id: uid(), titulo: p_datos.titulo.trim(), descripcion: p_datos.descripcion || "",
+      categoria: (p_datos.categoria || "").trim() || "General", precio: Number(p_datos.precio || 0),
+      cantidad: cant, disponible: cant, vendidos: 0, origen: p_datos.origen || "",
+      media: p_datos.media || [], vendedor_id: u.id, estado: "activo", creado_en: ahora()
+    });
+    guardarBD();
+    return { ok: true };
+  },
+  mis_productos({ p_token }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    liberar();
+    const items = BD.productos.filter(p => p.vendedor_id === u.id)
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(p => Object.assign({}, p, { apartados: apartadasDe(p.id) }));
+    return { ok: true, items };
+  },
+  editar_producto({ p_token, p_id, p_datos }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    const p = BD.productos.find(x => x.id === p_id);
+    if (!p) return { ok: false, motivo: "No existe" };
+    if (u.rol === "vendedor" && p.vendedor_id !== u.id) return { ok: false, motivo: "Ese producto no es tuyo" };
+    if (p_datos.cantidad !== undefined) {
+      const nueva = Math.max(0, parseInt(p_datos.cantidad, 10));
+      const delta = nueva - p.cantidad;
+      if (p.disponible + delta < 0) return { ok: false, motivo: "No puedes bajar la cantidad debajo de lo apartado o vendido" };
+      p.cantidad = nueva; p.disponible += delta;
+    }
+    ["titulo", "descripcion", "categoria", "origen"].forEach(k => { if (p_datos[k]) p[k] = p_datos[k]; });
+    if (p_datos.precio !== undefined) p.precio = Number(p_datos.precio);
+    if (p_datos.media) p.media = p_datos.media;
+    if (p_datos.estado) p.estado = p_datos.estado;
+    if (p.estado !== "oculto") p.estado = p.disponible === 0 ? "agotado" : "activo";
+    guardarBD();
+    return { ok: true };
+  },
+
+  /* ---- administración ---- */
+  admin_resumen({ p_token }) {
+    exige(p_token, ["admin"]);
+    liberar();
+    const hoy = new Date().toDateString();
+    const d = new Date();
+    const validos = BD.pedidos.filter(p => p.estado !== "cancelado");
+    const clientes = BD.usuarios.filter(u => u.rol === "cliente" && u.estado === "activo");
+    return {
+      ok: true,
+      solicitudes: BD.solicitudes.filter(s => s.estado === "pendiente").length,
+      abonos: BD.abonos.filter(b => b.estado === "pendiente").length,
+      por_cobrar: redondea(BD.abonos.filter(b => b.estado === "pendiente").reduce((s, b) => s + b.monto, 0)),
+      por_enviar: BD.pedidos.filter(p => p.estado === "preparando").length,
+      productos: BD.productos.filter(p => p.estado === "activo").length,
+      apartados: BD.apartados.filter(a => a.estado === "activo").length,
+      clientes: clientes.length,
+      deuda: redondea(clientes.filter(u => u.saldo < 0).reduce((s, u) => s - u.saldo, 0)),
+      a_favor: redondea(clientes.filter(u => u.saldo > 0).reduce((s, u) => s + u.saldo, 0)),
+      venta_hoy: redondea(validos.filter(p => new Date(p.creado_en).toDateString() === hoy).reduce((s, p) => s + p.total, 0)),
+      venta_mes: redondea(validos.filter(p => { const x = new Date(p.creado_en); return x.getMonth() === d.getMonth() && x.getFullYear() === d.getFullYear(); })
+                                 .reduce((s, p) => s + p.total, 0))
+    };
+  },
+  admin_solicitudes({ p_token, p_estado }) {
+    exige(p_token, ["admin"]);
+    return { ok: true, items: BD.solicitudes.filter(s => !p_estado || s.estado === p_estado)
+      .sort((a, b) => b.creada_en.localeCompare(a.creada_en)) };
+  },
+  admin_aprobar_solicitud({ p_token, p_solicitud, p_usuario, p_pin_hash, p_saldo, p_limite }) {
+    exige(p_token, ["admin"]);
+    const s = BD.solicitudes.find(x => x.id === p_solicitud && x.estado === "pendiente");
+    if (!s) return { ok: false, motivo: "Solicitud no encontrada" };
+    const usuario = String(p_usuario || "").trim().toLowerCase();
+    if (!usuario) return { ok: false, motivo: "Asígnale un nombre de usuario" };
+    if (BD.usuarios.some(u => u.usuario.toLowerCase() === usuario)) return { ok: false, motivo: "Ese usuario ya está ocupado" };
+    const nu = {
+      id: uid(), usuario, pin_hash: p_pin_hash, nombre: s.nombre, rol: "cliente",
+      tipo_cliente: s.tipo_cliente, telefono: s.telefono, ciudad: s.ciudad, direccion: s.direccion,
+      paqueteria: s.paqueteria, saldo: 0, limite_credito: Number(p_limite || 0), estado: "activo",
+      notas: "", creado_en: ahora(), ultimo_acceso: null
+    };
+    BD.usuarios.push(nu);
+    if (Number(p_saldo) > 0) movimiento(nu, "ajuste", Number(p_saldo), "Saldo a favor inicial");
+    Object.assign(s, { estado: "aprobada", usuario_dado: usuario, resuelta_en: ahora() });
+    guardarBD();
+    return { ok: true, usuario, telefono: s.telefono, nombre: s.nombre };
+  },
+  admin_rechazar_solicitud({ p_token, p_solicitud, p_motivo }) {
+    exige(p_token, ["admin"]);
+    const s = BD.solicitudes.find(x => x.id === p_solicitud && x.estado === "pendiente");
+    if (s) { Object.assign(s, { estado: "rechazada", motivo: p_motivo || "", resuelta_en: ahora() }); guardarBD(); }
+    return { ok: true };
+  },
+  admin_abonos({ p_token, p_estado }) {
+    exige(p_token, ["admin"]);
+    liberar();
+    const items = BD.abonos.filter(b => !p_estado || b.estado === p_estado)
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(b => {
+        const c = BD.usuarios.find(u => u.id === b.usuario_id) || {};
+        return Object.assign({}, b, { cliente: c.nombre, usuario: c.usuario, telefono: c.telefono, saldo: c.saldo });
+      });
+    return { ok: true, items, config: Object.assign({}, BD.config) };
+  },
+  admin_resolver_abono({ p_token, p_abono, p_accion, p_monto, p_nota }) {
+    exige(p_token, ["admin"]);
+    const b = BD.abonos.find(x => x.id === p_abono);
+    if (!b) return { ok: false, motivo: "Depósito no encontrado" };
+    if (b.estado === "cobrado") return { ok: false, motivo: "Ese depósito ya está cobrado" };
+    const u = BD.usuarios.find(x => x.id === b.usuario_id);
+    if (p_accion === "cobrado") {
+      const monto = redondea(p_monto || b.monto);
+      if (monto <= 0) return { ok: false, motivo: "El monto cobrado debe ser mayor a cero" };
+      b.estado = "cobrado"; b.monto_cobrado = monto; b.resuelto_en = ahora(); b.nota_izma = p_nota || "";
+      movimiento(u, "abono", monto,
+        (b.metodo === "retiro_sin_tarjeta" ? "Retiro sin tarjeta cobrado" : "Transferencia recibida"),
+        b.referencia || b.codigo || "");
+    } else {
+      b.estado = "rechazado"; b.resuelto_en = ahora(); b.nota_izma = p_nota || "";
+    }
+    guardarBD();
+    return { ok: true, saldo: u.saldo };
+  },
+  admin_ajustar_saldo({ p_token, p_usuario, p_monto, p_concepto }) {
+    exige(p_token, ["admin"]);
+    const u = BD.usuarios.find(x => x.id === p_usuario);
+    if (!u) return { ok: false, motivo: "Cliente no encontrado" };
+    const monto = redondea(p_monto);
+    if (!monto) return { ok: false, motivo: "Pon un monto distinto de cero" };
+    movimiento(u, "ajuste", monto, p_concepto || "Ajuste de IZMA");
+    guardarBD();
+    return { ok: true, saldo: u.saldo };
+  },
+  admin_limite({ p_token, p_usuario, p_limite }) {
+    exige(p_token, ["admin"]);
+    const u = BD.usuarios.find(x => x.id === p_usuario);
+    if (!u) return { ok: false, motivo: "Cliente no encontrado" };
+    u.limite_credito = Math.max(0, Number(p_limite || 0));
+    guardarBD();
+    return { ok: true };
+  },
+  admin_usuarios({ p_token, p_rol }) {
+    exige(p_token, ["admin"]);
+    const items = BD.usuarios.filter(u => !p_rol || u.rol === p_rol)
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(u => Object.assign(uJson(u), {
+        estado: u.estado, creado_en: u.creado_en, ultimo_acceso: u.ultimo_acceso,
+        pedidos: BD.pedidos.filter(p => p.usuario_id === u.id).length,
+        comprado: redondea(BD.pedidos.filter(p => p.usuario_id === u.id && p.estado !== "cancelado").reduce((s, p) => s + p.total, 0))
+      }));
+    return { ok: true, items };
+  },
+  admin_crear_usuario(a) {
+    exige(a.p_token, ["admin"]);
+    const usuario = String(a.p_usuario || "").trim().toLowerCase();
+    if (!["admin", "vendedor", "cliente"].includes(a.p_rol)) return { ok: false, motivo: "Rol no válido" };
+    if (BD.usuarios.some(u => u.usuario.toLowerCase() === usuario)) return { ok: false, motivo: "Ese usuario ya está ocupado" };
+    const nu = {
+      id: uid(), usuario, pin_hash: a.p_pin_hash, nombre: (a.p_nombre || usuario).trim(), rol: a.p_rol,
+      tipo_cliente: a.p_rol === "cliente" ? (a.p_tipo || "local") : null,
+      telefono: a.p_telefono || "", ciudad: a.p_ciudad || "", direccion: "", paqueteria: "",
+      saldo: 0, limite_credito: Number(a.p_limite || 0), estado: "activo", notas: "",
+      creado_en: ahora(), ultimo_acceso: null
+    };
+    BD.usuarios.push(nu);
+    if (Number(a.p_saldo) > 0) movimiento(nu, "ajuste", Number(a.p_saldo), "Saldo a favor inicial");
+    guardarBD();
+    return { ok: true };
+  },
+  admin_editar_usuario({ p_token, p_id, p_datos }) {
+    exige(p_token, ["admin"]);
+    const u = BD.usuarios.find(x => x.id === p_id);
+    if (!u) return { ok: false, motivo: "No existe" };
+    ["nombre", "telefono", "ciudad", "direccion", "paqueteria", "tipo_cliente", "estado", "notas"].forEach(k => {
+      if (p_datos[k]) u[k] = p_datos[k];
+    });
+    if (p_datos.pin_hash) u.pin_hash = p_datos.pin_hash;
+    if (p_datos.estado === "suspendido") BD.sesiones = BD.sesiones.filter(s => s.usuario_id !== u.id);
+    guardarBD();
+    return { ok: true };
+  },
+  admin_pedidos({ p_token, p_estado }) {
+    exige(p_token, ["admin"]);
+    const items = BD.pedidos.filter(p => !p_estado || p.estado === p_estado)
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(p => {
+        const c = BD.usuarios.find(u => u.id === p.usuario_id) || {};
+        return Object.assign({}, p, {
+          cliente: c.nombre, usuario: c.usuario, telefono: c.telefono,
+          tipo_cliente: c.tipo_cliente, saldo: c.saldo, items: BD.items.filter(i => i.pedido_id === p.id)
+        });
+      });
+    return { ok: true, items };
+  },
+  admin_actualizar_pedido({ p_token, p_pedido, p_datos }) {
+    exige(p_token, ["admin"]);
+    const p = BD.pedidos.find(x => x.id === p_pedido);
+    if (!p) return { ok: false, motivo: "Pedido no encontrado" };
+    const u = BD.usuarios.find(x => x.id === p.usuario_id);
+    if (p_datos.estado === "cancelado" && p.estado !== "cancelado") {
+      let regresa = 0;
+      BD.items.filter(i => i.pedido_id === p.id && i.estado === "asignado").forEach(i => {
+        const pr = BD.productos.find(x => x.id === i.producto_id);
+        if (pr) {
+          pr.disponible += i.cantidad;
+          pr.vendidos = Math.max(0, pr.vendidos - i.cantidad);
+          if (pr.estado === "agotado") pr.estado = "activo";
+        }
+        i.estado = "rechazado"; i.motivo = "Pedido cancelado";
+        regresa += i.precio * i.cantidad;
+      });
+      if (regresa) movimiento(u, "devolucion", redondea(regresa), "Cancelación " + p.folio, p.folio);
+      p.total = 0;
+    }
+    ["estado", "guia", "paqueteria", "notas_izma", "envio"].forEach(k => { if (p_datos[k] !== undefined) p[k] = p_datos[k]; });
+    p.actualizado_en = ahora();
+    guardarBD();
+    return { ok: true };
+  },
+  admin_rechazar_item({ p_token, p_item, p_motivo }) {
+    exige(p_token, ["admin"]);
+    const i = BD.items.find(x => x.id === p_item);
+    if (!i || i.estado !== "asignado") return { ok: false, motivo: "Esa partida ya no está asignada" };
+    const p = BD.pedidos.find(x => x.id === i.pedido_id);
+    const u = BD.usuarios.find(x => x.id === p.usuario_id);
+    const pr = BD.productos.find(x => x.id === i.producto_id);
+    if (pr) {
+      pr.disponible += i.cantidad;
+      pr.vendidos = Math.max(0, pr.vendidos - i.cantidad);
+      if (pr.estado === "agotado") pr.estado = "activo";
+    }
+    i.estado = "rechazado";
+    i.motivo = p_motivo || "No alcanzó mercancía";
+    const importe = redondea(i.precio * i.cantidad);
+    p.total = redondea(p.total - importe);
+    movimiento(u, "devolucion", importe, "No alcanzó: " + i.titulo + " (" + p.folio + ")", p.folio);
+    guardarBD();
+    return { ok: true };
+  },
+  admin_productos({ p_token, p_busqueda }) {
+    exige(p_token, ["admin"]);
+    liberar();
+    const q = String(p_busqueda || "").toLowerCase();
+    const items = BD.productos.filter(p => !q || p.titulo.toLowerCase().includes(q))
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(p => Object.assign({}, p, {
+        apartados: apartadasDe(p.id),
+        vendedor: (BD.usuarios.find(v => v.id === p.vendedor_id) || {}).nombre || "IZMA"
+      }));
+    return { ok: true, items };
+  },
+  admin_guardar_config({ p_token, p_datos }) {
+    exige(p_token, ["admin"]);
+    Object.assign(BD.config, p_datos, {
+      minutos_apartado: Math.max(1, parseInt(p_datos.minutos_apartado || BD.config.minutos_apartado, 10)),
+      tope_transferencia: Number(p_datos.tope_transferencia || BD.config.tope_transferencia),
+      retiro_min: Number(p_datos.retiro_min || BD.config.retiro_min),
+      retiro_max: Number(p_datos.retiro_max || BD.config.retiro_max),
+      retiro_multiplo: Number(p_datos.retiro_multiplo || BD.config.retiro_multiplo)
+    });
+    guardarBD();
+    return { ok: true, config: Object.assign({}, BD.config) };
+  }
+};
+
+/* ===================== 5. estado ===================== */
+const E = {
+  token: almacen.get("izma_token") || "",
+  yo: null, config: {}, vista: "", datos: {},
+  busqueda: "", categoria: "", media: [], pendientes: 0, evidencia: null
+};
+function salirLocal() {
+  almacen.del("izma_token");
+  E.token = ""; E.yo = null;
+  $("#app").hidden = true;
+  $("#acceso").style.display = "flex";
+}
+
+/* ===================== 6. acceso ===================== */
+$$("[data-pestana]").forEach(b => b.addEventListener("click", () => {
+  $$("[data-pestana]").forEach(x => x.setAttribute("aria-current", x === b));
+  $("#form-entrar").hidden = b.dataset.pestana !== "entrar";
+  $("#form-solicitar").hidden = b.dataset.pestana !== "solicitar";
+}));
+$("#form-solicitar").addEventListener("change", e => {
+  if (e.target.name === "tipo") $$("[data-solo-foraneo]").forEach(l => l.hidden = e.target.value !== "foraneo");
+});
+$("#form-entrar").addEventListener("submit", async e => {
+  e.preventDefault();
+  const b = e.target.querySelector("button[type=submit]");
+  b.disabled = true; b.textContent = "Entrando…";
+  try {
+    const d = new FormData(e.target);
+    const usuario = d.get("usuario").trim();
+    const res = await rpc("login", { p_usuario: usuario, p_pin_hash: await hashPin(usuario, d.get("pin")) });
+    if (!res.ok) throw new Error(res.motivo);
+    almacen.set("izma_token", res.token);
+    E.token = res.token; E.yo = res.usuario; E.config = res.config;
+    e.target.reset();
+    arrancarApp();
+  } catch (err) { aviso(err.message, "mal"); }
+  b.disabled = false; b.textContent = "Entrar";
+});
+$("#form-solicitar").addEventListener("submit", async e => {
+  e.preventDefault();
+  const b = e.target.querySelector("button[type=submit]");
+  b.disabled = true; b.textContent = "Enviando…";
+  try {
+    const d = new FormData(e.target);
+    const res = await rpc("crear_solicitud", {
+      p_nombre: d.get("nombre"), p_telefono: d.get("telefono"), p_ciudad: d.get("ciudad") || "",
+      p_tipo: d.get("tipo"), p_paqueteria: d.get("paqueteria") || "",
+      p_direccion: d.get("direccion") || "", p_referencia: d.get("referencia") || ""
+    });
+    if (!res.ok) throw new Error(res.motivo);
+    e.target.reset();
+    hoja('<h2>Solicitud enviada</h2><p>IZMA revisa tu información y te manda tu usuario y PIN por WhatsApp. Normalmente es el mismo día.</p><button class="btn lleno" data-cerrar>Listo</button>');
+  } catch (err) { aviso(err.message, "mal"); }
+  b.disabled = false; b.textContent = "Enviar solicitud";
+});
+
+/* ===================== 7. navegación ===================== */
+const MENUS = {
+  cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"], ["cuenta", "Mi cuenta"]],
+  vendedor: [["publicar", "Subir producto"], ["inventario", "Lo que subí"], ["cuenta", "Mi cuenta"]],
+  admin: [["resumen", "Resumen"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
+          ["publicar", "Subir producto"], ["productos", "Productos"], ["usuarios", "Clientes"], ["ajustes", "Ajustes"]]
+};
+function pintarNav() {
+  const rolTexto = E.yo.rol === "cliente"
+    ? (E.yo.tipo_cliente === "foraneo" ? "cliente foráneo" : "cliente local")
+    : (E.yo.rol === "admin" ? "administración" : "vendedor autorizado");
+  const bolsa = E.yo.rol === "cliente"
+    ? '<span class="bolsa num ' + (E.yo.saldo < 0 ? "deuda" : "") + '">' +
+      (E.yo.saldo < 0 ? "debes " + dinero(-E.yo.saldo) : dinero(E.yo.saldo)) + "</span>" : "";
+  $("#quien").innerHTML = "<b>" + esc(E.yo.nombre) + "</b>" + esc(E.yo.usuario) + " · " + rolTexto + bolsa;
+  $("#nav").innerHTML = MENUS[E.yo.rol].map(([id, t]) => {
+    let globo = "";
+    if (id === "carrito" && E.pendientes) globo = '<i class="globo num">' + E.pendientes + "</i>";
+    if (id === "solicitudes" && E.datos.pendSol) globo = '<i class="globo num">' + E.datos.pendSol + "</i>";
+    if (id === "pagos" && E.datos.pendAbonos) globo = '<i class="globo num">' + E.datos.pendAbonos + "</i>";
+    return '<button data-vista="' + id + '" aria-current="' + (E.vista === id) + '">' + t + globo + "</button>";
+  }).join("") + '<button data-salir>Salir</button>';
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-vista]");
+  if (b) { cerrarHoja(); ir(b.dataset.vista); return; }
+  if (e.target.closest("[data-salir]")) {
+    try { await rpc("salir", { p_token: E.token }); } catch {}
+    salirLocal();
+    return;
+  }
+  if (e.target.closest("[data-cerrar]")) cerrarHoja();
+  const img = e.target.closest("[data-ver]");
+  if (img) verImagen(img.dataset.ver);
+});
+function ir(vista) { E.vista = vista; pintarNav(); pintar(); }
+function arrancarApp() {
+  $("#acceso").style.display = "none";
+  $("#app").hidden = false;
+  $("#cinta-demo").hidden = !MODO_DEMO;
+  E.vista = { cliente: "bodega", vendedor: "publicar", admin: "resumen" }[E.yo.rol];
+  pintarNav();
+  pintar();
+}
+async function pintar() {
+  const v = $("#vista");
+  v.innerHTML = '<div class="cargando">Cargando…</div>';
+  try { await VISTAS[E.vista](); }
+  catch (err) {
+    v.innerHTML = '<div class="tarjeta"><div class="mensaje rojo">' + esc(err.message) +
+      '</div><button class="btn claro" data-vista="' + E.vista + '">Intentar otra vez</button></div>';
+  }
+}
+
+/* ===================== 8. cliente: bodega y carrito ===================== */
+const VISTAS = {};
+
+VISTAS.bodega = async () => {
+  const d = await rpc("catalogo", { p_token: E.token, p_busqueda: E.busqueda, p_categoria: E.categoria });
+  E.config = d.config;
+  if (E.yo.rol === "cliente") {
+    E.yo.saldo = d.saldo;
+    const car = await rpc("carrito", { p_token: E.token });
+    E.pendientes = car.items.length;
+  }
+  pintarNav();
+  const cats = ["", ...d.categorias.filter(Boolean)];
+  $("#vista").innerHTML =
+    (E.config.aviso ? '<div class="mensaje kraft">' + esc(E.config.aviso) + "</div>" : "") +
+    '<div class="buscador"><input id="q" placeholder="Buscar en la bodega…" value="' + esc(E.busqueda) +
+      '"><button class="btn" id="bq">Buscar</button></div>' +
+    '<div class="filtros">' + cats.map(c =>
+      '<button data-cat="' + esc(c) + '" aria-current="' + (E.categoria === c) + '">' + (c ? esc(c) : "Todo") + "</button>").join("") + "</div>" +
+    '<p class="tenue" style="margin:0 0 12px">El apartado dura ' + E.config.minutos_apartado +
+      ' min y se paga con tu saldo a favor. Si se vence, la pieza regresa a la bodega.</p>' +
+    '<div class="rejilla">' + d.items.map(pieza).join("") + "</div>" +
+    (d.items.length ? "" : '<div class="vacio"><h3>Todavía no hay nada aquí</h3><p>IZMA y los vendedores suben mercancía en cuanto salen de las bodegas de Tijuana.</p></div>');
+
+  $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
+  $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
+  $$("[data-cat]").forEach(b => b.onclick = () => { E.categoria = b.dataset.cat; pintar(); });
+  $$("[data-apartar]").forEach(b => b.onclick = () => apartarPieza(b.dataset.apartar, b.closest(".pieza")));
+  $$(".stepper button").forEach(b => b.onclick = () => {
+    const i = b.parentElement.querySelector("input");
+    const max = +i.max || 1;
+    i.value = Math.min(max, Math.max(1, (+i.value || 1) + (+b.dataset.paso)));
+  });
+  $$("[data-galeria]").forEach(el => el.onclick = () => {
+    const p = d.items.find(x => x.id === el.dataset.galeria);
+    hoja("<h2>" + esc(p.titulo) + "</h2>" +
+      (p.media || []).map(m => m.tipo === "video"
+        ? '<video src="' + esc(m.url) + '" controls playsinline style="width:100%;border-radius:10px;margin-bottom:8px"></video>'
+        : '<img src="' + esc(m.url) + '" alt="" style="width:100%;border-radius:10px;margin-bottom:8px">').join("") +
+      '<p class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
+        '<span class="sello ' + (p.disponible ? "verde" : "rojo") + ' num">' +
+        (p.disponible ? p.disponible + " en existencia" : "Agotado") + "</span></p>" +
+      (p.descripcion ? "<p>" + esc(p.descripcion) + "</p>" : "") +
+      '<p class="tenue">Subió: ' + esc(p.vendedor) + (p.origen ? " · " + esc(p.origen) : "") + "</p>" +
+      '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
+  });
+};
+
+function pieza(p) {
+  const m = (p.media || [])[0];
+  const libre = p.disponible > 0 && p.estado === "activo";
+  const cliente = E.yo.rol === "cliente";
+  return '<article class="pieza ' + (libre ? "" : "agotado") + '">' +
+    '<div class="lienzo" data-galeria="' + p.id + '">' +
+      (m ? (m.tipo === "video"
+        ? '<video src="' + esc(m.url) + '" muted playsinline preload="metadata"></video>'
+        : '<img src="' + esc(m.url) + '" alt="' + esc(p.titulo) + '" loading="lazy">')
+        : '<div class="fila" style="height:100%;justify-content:center;color:#96A2B3">Sin foto</div>') +
+      '<span class="cinta">' + esc(p.categoria) + "</span>" +
+      ((p.media || []).length > 1 ? '<span class="mas">+' + (p.media.length - 1) + "</span>" : "") +
+    "</div>" +
+    '<div class="cuerpo">' +
+      '<div class="titulo">' + esc(p.titulo) + "</div>" +
+      (p.descripcion ? '<div class="tenue">' + esc(p.descripcion) + "</div>" : "") +
+      '<div class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
+        (libre ? '<span class="sello verde num">' + p.disponible + " en existencia</span>"
+               : '<span class="sello rojo">Agotado</span>') + "</div>" +
+      (p.origen ? '<div class="tenue">Origen: ' + esc(p.origen) + "</div>" : "") +
+      (p.mio > 0 ? '<div class="sello kraft num">Tienes ' + p.mio + " en tu carrito</div>" : "") +
+      (libre && cliente ? '<div class="fila" style="margin-top:auto">' +
+        '<div class="stepper"><button data-paso="-1" aria-label="menos">−</button>' +
+        '<input class="num" value="1" min="1" max="' + p.disponible + '" inputmode="numeric">' +
+        '<button data-paso="1" aria-label="más">+</button></div>' +
+        '<button class="btn kraft" style="flex:1" data-apartar="' + p.id + '">Apartar</button></div>' : "") +
+    "</div></article>";
+}
+
+async function apartarPieza(id, tarjeta) {
+  const cant = +(tarjeta.querySelector(".stepper input") || {}).value || 1;
+  const btn = tarjeta.querySelector("[data-apartar]");
+  btn.disabled = true; btn.textContent = "Apartando…";
+  try {
+    const r = await rpc("apartar", { p_token: E.token, p_producto: id, p_cantidad: cant });
+    if (!r.ok) { aviso(r.motivo, "mal"); pintar(); return; }
+    aviso("Apartado " + r.minutos + " min. Pasa a tu carrito.", "bien");
+    pintar();
+  } catch (err) {
+    aviso(err.message, "mal");
+    btn.disabled = false; btn.textContent = "Apartar";
+  }
+}
+
+VISTAS.carrito = async () => {
+  await rpc("renovar_carrito", { p_token: E.token });
+  const d = await rpc("carrito", { p_token: E.token });
+  E.config = d.config; E.pendientes = d.items.length; E.yo.saldo = d.saldo;
+  pintarNav();
+  if (!d.items.length) {
+    $("#vista").innerHTML = '<div class="vacio"><h3>Tu carrito está vacío</h3>' +
+      "<p>Aparta piezas en la bodega y aquí las confirmas.</p>" +
+      '<button class="btn" data-vista="bodega">Ir a la bodega</button></div>';
+    return;
+  }
+  const disponible = redondea(d.saldo + (d.limite || 0));
+  const alcanza = d.total <= disponible;
+  const restante = redondea(d.saldo - d.total);
+  const local = E.yo.tipo_cliente === "local";
+
+  $("#vista").innerHTML =
+    '<div class="tarjeta">' +
+      '<div class="fila entre" style="margin-bottom:6px"><h2 style="margin:0">Piezas apartadas</h2>' +
+        '<span class="reloj" data-expira="' + d.items[0].expira_en + '" data-tipo="apartado">⏱ --:--</span></div>' +
+      '<p class="tenue" style="margin:0 0 6px">Si el reloj llega a cero, las piezas regresan a la bodega para otros clientes.</p>' +
+      d.items.map(i => '<div class="renglon">' +
+        ((i.media || [])[0]
+          ? (i.media[0].tipo === "video"
+            ? '<video class="mini" src="' + esc(i.media[0].url) + '" muted></video>'
+            : '<img class="mini" src="' + esc(i.media[0].url) + '" alt="">')
+          : '<div class="mini"></div>') +
+        '<div class="crece"><div style="font-weight:600">' + esc(i.titulo) + "</div>" +
+        '<div class="tenue num">' + i.cantidad + " × " + dinero(i.precio) + "</div></div>" +
+        '<div style="text-align:right"><div class="num" style="font-weight:600">' + dinero(i.importe) + "</div>" +
+        '<button class="btn claro chico" data-soltar="' + i.apartado + '">Quitar</button></div></div>').join("") +
+      '<div class="total"><span>Total</span><span class="cifra">' + dinero(d.total) + "</span></div>" +
+      '<div class="mensaje ' + (alcanza ? "info" : "rojo") + '">' +
+        "Tu saldo a favor: <b>" + dinero(d.saldo) + "</b>" +
+        (d.limite ? " · crédito autorizado " + dinero(d.limite) : "") + "<br>" +
+        (alcanza
+          ? (restante >= 0 ? "Después de esta compra te quedan <b>" + dinero(restante) + "</b>."
+                           : "Quedarías debiendo <b>" + dinero(-restante) + "</b> de tu crédito.")
+          : "Te faltan <b>" + dinero(d.total - disponible) + "</b>. Abona y vuelve a confirmar.") +
+      "</div>" +
+      (local
+        ? '<label class="campo"><span>Cómo lo recibes</span><select id="envio">' +
+          '<option value="recoge">Recojo en la bodega</option>' +
+          '<option value="por_cobrar">Envío por paquetería (flete por cobrar)</option></select></label>'
+        : '<div class="mensaje info">Tu pedido sale por paquetería y el flete se paga al recibir (por cobrar).</div>' +
+          '<div class="dos">' +
+          '<label class="campo"><span>Paquetería</span><input id="paq" value="' + esc(E.yo.paqueteria || "") + '"></label>' +
+          '<label class="campo"><span>Dirección de envío</span><input id="dir" value="' + esc(E.yo.direccion || "") + '"></label></div>') +
+      '<label class="campo"><span>Nota para IZMA (opcional)</span><input id="nota" placeholder="Ej. júntenlo con mi pedido del viernes"></label>' +
+      (alcanza
+        ? '<button class="btn lleno verde" id="confirmar">Confirmar y pagar con mi saldo</button>'
+        : '<button class="btn lleno kraft" data-vista="saldo">Abonar a mi saldo</button>') +
+    "</div>";
+
+  $$("[data-soltar]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await rpc("soltar", { p_token: E.token, p_apartado: b.dataset.soltar }); pintar(); }
+    catch (err) { aviso(err.message, "mal"); }
+  });
+  if ($("#confirmar")) $("#confirmar").onclick = async () => {
+    const b = $("#confirmar");
+    b.disabled = true; b.textContent = "Confirmando…";
+    try {
+      const r = await rpc("confirmar_pedido", {
+        p_token: E.token,
+        p_envio: ($("#envio") || {}).value || (local ? "recoge" : "por_cobrar"),
+        p_direccion: ($("#dir") || {}).value || "", p_paqueteria: ($("#paq") || {}).value || "",
+        p_notas: $("#nota").value
+      });
+      if (!r.ok) throw new Error(r.motivo);
+      E.yo.saldo = r.saldo; E.pendientes = 0;
+      const wa = String((r.config || {}).whatsapp_pedidos || "").replace(/\D/g, "");
+      ir("pedidos");
+      hoja("<h2>Pedido " + esc(r.folio) + "</h2>" +
+        '<p>Se descontaron <b class="num">' + dinero(r.total) + "</b> de tu saldo.</p>" +
+        '<div class="mensaje ' + (r.saldo < 0 ? "rojo" : "verde") + '">' +
+          (r.saldo < 0 ? "Quedas debiendo <b>" + dinero(-r.saldo) + "</b>" : "Saldo a favor: <b>" + dinero(r.saldo) + "</b>") + "</div>" +
+        (wa ? '<a class="btn lleno verde" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' +
+          wa + "?text=" + encodeURIComponent("Hola IZMA, acabo de hacer el pedido " + r.folio) + '">Avisar por WhatsApp</a>' : "") +
+        '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>');
+    } catch (err) {
+      aviso(err.message, "mal");
+      b.disabled = false; b.textContent = "Confirmar y pagar con mi saldo";
+    }
+  };
+};
+
+/* ===================== 9. cliente: saldo y abonos ===================== */
+const ESTADO_ABONO = {
+  pendiente: ["Esperando a que IZMA lo cobre", "kraft"],
+  cobrado: ["Cobrado y abonado", "verde"],
+  rechazado: ["Rechazado", "rojo"],
+  vencido: ["Se venció sin cobrar", "rojo"],
+  cancelado: ["Cancelado por ti", ""]
+};
+
+VISTAS.saldo = async () => {
+  const d = await rpc("mi_saldo", { p_token: E.token });
+  E.config = d.config; E.yo.saldo = d.saldo;
+  pintarNav();
+  const debe = d.saldo < 0;
+  $("#vista").innerHTML =
+    '<div class="monedero ' + (debe ? "debe" : "") + '">' +
+      '<div class="rotulo">' + (debe ? "Lo que le debes a IZMA" : "Tu saldo a favor") + "</div>" +
+      '<div class="grande">' + dinero(Math.abs(d.saldo)) + "</div>" +
+      '<div class="rotulo">' + (d.limite ? "Crédito autorizado " + dinero(d.limite) : "Sin crédito autorizado") + "</div>" +
+      '<div class="fila"><button class="btn kraft" id="abonar-t">Abonar por transferencia</button>' +
+      '<button class="btn claro" id="abonar-r">Retiro sin tarjeta</button></div>' +
+    "</div>" +
+    '<div class="tarjeta"><h2>Depósitos que mandaste</h2>' +
+      (d.abonos.length ? d.abonos.map(fichaAbonoCliente).join("")
+        : '<p class="tenue" style="margin:0">Todavía no registras depósitos. Manda uno y IZMA lo cobra.</p>') + "</div>" +
+    '<div class="tarjeta"><h2>Movimientos</h2>' +
+      (d.movimientos.length ? d.movimientos.map(m =>
+        '<div class="mov"><div><div>' + esc(m.concepto) + "</div>" +
+        '<div class="tenue">' + fecha(m.creado_en) + " · saldo " + dinero(m.saldo) + "</div></div>" +
+        '<div class="monto ' + (m.monto >= 0 ? "mas" : "menos") + '">' +
+        (m.monto >= 0 ? "+" : "−") + dinero(Math.abs(m.monto)) + "</div></div>").join("")
+        : '<p class="tenue" style="margin:0">Sin movimientos.</p>') + "</div>";
+
+  $("#abonar-t").onclick = () => formAbono("transferencia", d.config);
+  $("#abonar-r").onclick = () => formAbono("retiro_sin_tarjeta", d.config);
+  $$("[data-cancelar-abono]").forEach(b => b.onclick = async () => {
+    if (!confirm("¿Cancelar este depósito?")) return;
+    await rpc("cancelar_abono", { p_token: E.token, p_abono: b.dataset.cancelarAbono });
+    pintar();
+  });
+};
+
+function fichaAbonoCliente(b) {
+  const et = ESTADO_ABONO[b.estado] || [b.estado, ""];
+  const esRetiro = b.metodo === "retiro_sin_tarjeta";
+  return '<div class="renglon">' +
+    '<img class="mini" src="' + esc(b.evidencia) + '" alt="" data-ver="' + esc(b.evidencia) + '">' +
+    '<div class="crece">' +
+      '<div class="fila entre envolver"><b class="num">' + dinero(b.monto) + "</b>" +
+        '<span class="sello ' + et[1] + '">' + et[0] + "</span></div>" +
+      '<div class="tenue">' + (esRetiro ? "Retiro sin tarjeta · " + esc(b.banco) : "Transferencia" + (b.banco ? " · " + esc(b.banco) : "")) +
+        " · " + fecha(b.creado_en) + "</div>" +
+      (esRetiro ? '<div class="tenue">Clave: <b>' + esc(b.codigo) + "</b>" + (b.celular ? " · cel " + esc(b.celular) : "") + "</div>" : "") +
+      (b.referencia ? '<div class="tenue">Referencia: ' + esc(b.referencia) + "</div>" : "") +
+      (esRetiro && b.estado === "pendiente" && b.vence_en
+        ? '<div style="margin-top:5px"><span class="reloj calmo" data-expira="' + b.vence_en + '">⏱ --:--</span>' +
+          '<span class="tenue"> para que IZMA lo retire</span></div>' : "") +
+      (b.nota_izma ? '<div class="tenue">IZMA: ' + esc(b.nota_izma) + "</div>" : "") +
+      (b.estado === "pendiente" ? '<button class="btn claro chico" style="margin-top:6px" data-cancelar-abono="' + b.id + '">Cancelar</button>' : "") +
+    "</div></div>";
+}
+
+function formAbono(metodo, c) {
+  E.evidencia = null;
+  const esRetiro = metodo === "retiro_sin_tarjeta";
+  const en2h = new Date(Date.now() + 2 * 3600000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  hoja("<h2>" + (esRetiro ? "Retiro sin tarjeta" : "Depósito por transferencia") + "</h2>" +
+    (esRetiro
+      ? '<div class="mensaje kraft">Genera el retiro sin tarjeta en tu app de <b>' + esc(c.banco_retiro) +
+        "</b> por el monto que quieras abonar, en múltiplos de $" + c.retiro_multiplo + ", desde " + dinero(c.retiro_min) +
+        " y hasta " + dinero(c.retiro_max) + ". Pásanos la clave y hasta qué hora se puede retirar.</div>"
+      : '<div class="mensaje kraft">Las transferencias deben ser <b>menores a ' + dinero(c.tope_transferencia) +
+        "</b>. De ahí para arriba usa retiro sin tarjeta.<br>" +
+        esc(c.banco_nombre || "") + (c.banco_beneficiario ? " · " + esc(c.banco_beneficiario) : "") +
+        (c.banco_clabe ? "<br>CLABE: <b>" + esc(c.banco_clabe) + "</b>" : "") +
+        (c.banco_tarjeta ? "<br>Tarjeta: <b>" + esc(c.banco_tarjeta) + "</b>" : "") + "</div>") +
+    '<label class="campo"><span>Monto</span><input id="ab-monto" inputmode="decimal" placeholder="0.00"></label>' +
+    (esRetiro
+      ? '<div class="dos">' +
+          '<label class="campo"><span>Clave de retiro</span><input id="ab-codigo" inputmode="numeric"></label>' +
+          '<label class="campo"><span>Celular asociado</span><input id="ab-celular" inputmode="tel"></label></div>' +
+        '<label class="campo"><span>¿Hasta qué hora se puede retirar?</span>' +
+          '<input id="ab-vence" type="datetime-local" value="' + en2h + '"></label>'
+      : '<div class="dos">' +
+          '<label class="campo"><span>Banco desde el que enviaste</span><input id="ab-banco"></label>' +
+          '<label class="campo"><span>Referencia o clave de rastreo</span><input id="ab-ref"></label></div>') +
+    '<label class="suelta">Subir foto del comprobante' +
+      '<div class="tenue" style="color:#8A5A15">' + (esRetiro ? "La pantalla con la clave y el monto" : "El comprobante de la transferencia") + "</div>" +
+      '<input type="file" accept="image/*" id="ab-foto" hidden></label>' +
+    '<div class="tiras" id="ab-tira"></div>' +
+    '<label class="campo" style="margin-top:12px"><span>Nota (opcional)</span><input id="ab-nota"></label>' +
+    '<button class="btn lleno verde" id="ab-ok">Enviar a IZMA</button>' +
+    '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+
+  $("#ab-foto").onchange = async e => {
+    if (!e.target.files[0]) return;
+    try {
+      const m = await subir(e.target.files[0]);
+      E.evidencia = m.url;
+      $("#ab-tira").innerHTML = '<div class="tira"><img src="' + esc(m.url) + '" alt=""></div>';
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+  $("#ab-ok").onclick = async () => {
+    const b = $("#ab-ok");
+    b.disabled = true; b.textContent = "Enviando…";
+    try {
+      const r = await rpc("crear_abono", {
+        p_token: E.token,
+        p_datos: {
+          metodo, monto: Number($("#ab-monto").value || 0), evidencia: E.evidencia,
+          codigo: ($("#ab-codigo") || {}).value || "", celular: ($("#ab-celular") || {}).value || "",
+          vence_en: ($("#ab-vence") || {}).value ? new Date($("#ab-vence").value).toISOString() : null,
+          banco: ($("#ab-banco") || {}).value || "", referencia: ($("#ab-ref") || {}).value || "",
+          nota: $("#ab-nota").value
+        }
+      });
+      if (!r.ok) throw new Error(r.motivo);
+      cerrarHoja();
+      aviso("Depósito enviado. IZMA lo revisa y te abona el saldo.", "bien");
+      pintar();
+    } catch (err) {
+      aviso(err.message, "mal");
+      b.disabled = false; b.textContent = "Enviar a IZMA";
+    }
+  };
+}
+
+/* ===================== 10. cliente: compras ===================== */
+const ESTADO_PEDIDO = {
+  preparando: ["Preparando tu pedido", "kraft"],
+  enviado: ["Enviado", "verde"],
+  entregado: ["Entregado", "verde"],
+  cancelado: ["Cancelado", ""]
+};
+
+async function pedidosCliente() {
+  const d = await rpc("mis_pedidos", { p_token: E.token });
+  E.config = d.config; E.yo.saldo = d.saldo;
+  pintarNav();
+  if (!d.pedidos.length) {
+    $("#vista").innerHTML = '<div class="vacio"><h3>Aún no tienes compras</h3>' +
+      "<p>Cuando confirmes un carrito lo verás aquí con lo asignado, lo que no alcanzaste y tu guía.</p>" +
+      '<button class="btn" data-vista="bodega">Ir a la bodega</button></div>';
+    return;
+  }
+  $("#vista").innerHTML = d.pedidos.map(p => {
+    const et = ESTADO_PEDIDO[p.estado] || [p.estado, ""];
+    const asignados = p.items.filter(i => i.estado === "asignado");
+    const rechazados = p.items.filter(i => i.estado === "rechazado");
+    return '<div class="tarjeta">' +
+      '<div class="fila entre envolver"><h3 style="margin:0">' + esc(p.folio) + "</h3>" +
+        '<span class="sello ' + et[1] + '">' + et[0] + "</span></div>" +
+      '<div class="tenue">' + fecha(p.creado_en) + " · " +
+        (p.envio === "recoge" ? "recoges en bodega" : "envío por paquetería, flete por cobrar") + "</div>" +
+      (asignados.length ? '<div class="linea-arriba"><b>Asignado</b>' + asignados.map(i =>
+        '<div class="fila entre"><span>' + i.cantidad + " × " + esc(i.titulo) + '</span><span class="num">' +
+        dinero(i.precio * i.cantidad) + "</span></div>").join("") + "</div>" : "") +
+      (rechazados.length ? '<div class="linea-arriba"><b>No alcanzaste</b>' + rechazados.map(i =>
+        '<div class="fila entre"><span class="tachado">' + i.cantidad + " × " + esc(i.titulo) + '</span>' +
+        '<span class="sello rojo">devuelto ' + dinero(i.precio * i.cantidad) + "</span></div>" +
+        (i.motivo ? '<div class="tenue">' + esc(i.motivo) + "</div>" : "")).join("") + "</div>" : "") +
+      '<div class="total" style="margin:10px 0 0"><span>Pagado con tu saldo</span><span class="cifra">' + dinero(p.total) + "</span></div>" +
+      (p.guia ? '<div class="mensaje info" style="margin-top:12px">Guía <b>' + esc(p.guia) + "</b>" +
+        (p.paqueteria ? " · " + esc(p.paqueteria) : "") + "</div>" : "") +
+      (p.notas_izma ? '<div class="mensaje kraft">' + esc(p.notas_izma) + "</div>" : "") +
+      "</div>";
+  }).join("");
+}
+
+VISTAS.cuenta = async () => {
+  const rolTexto = E.yo.rol === "cliente"
+    ? (E.yo.tipo_cliente === "foraneo" ? "cliente foráneo" : "cliente local") : esc(E.yo.rol);
+  $("#vista").innerHTML =
+    '<div class="tarjeta"><h2>Mis datos</h2>' +
+      '<p class="tenue">Usuario <b>' + esc(E.yo.usuario) + "</b> · " + rolTexto + "</p>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>WhatsApp</span><input id="tel" value="' + esc(E.yo.telefono || "") + '"></label>' +
+        '<label class="campo"><span>Ciudad</span><input id="ciu" value="' + esc(E.yo.ciudad || "") + '"></label></div>' +
+      '<label class="campo"><span>Paquetería</span><input id="pq" value="' + esc(E.yo.paqueteria || "") + '"></label>' +
+      '<label class="campo"><span>Dirección de envío</span><textarea id="dr">' + esc(E.yo.direccion || "") + "</textarea></label>" +
+      '<button class="btn" id="guardar">Guardar cambios</button></div>' +
+    '<div class="tarjeta"><h2>Cambiar mi PIN</h2>' +
+      '<label class="campo"><span>PIN nuevo</span><input id="pin1" type="password" inputmode="numeric"></label>' +
+      '<label class="campo"><span>Repítelo</span><input id="pin2" type="password" inputmode="numeric"></label>' +
+      '<button class="btn claro" id="cambiar">Cambiar PIN</button></div>';
+  $("#guardar").onclick = async () => {
+    try {
+      const r = await rpc("actualizar_mis_datos", {
+        p_token: E.token, p_telefono: $("#tel").value, p_ciudad: $("#ciu").value,
+        p_direccion: $("#dr").value, p_paqueteria: $("#pq").value
+      });
+      E.yo = Object.assign(E.yo, r.usuario); pintarNav(); aviso("Datos guardados", "bien");
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+  $("#cambiar").onclick = async () => {
+    const a = $("#pin1").value.trim(), b = $("#pin2").value.trim();
+    if (a.length < 4) return aviso("El PIN necesita al menos 4 dígitos", "mal");
+    if (a !== b) return aviso("Los PIN no coinciden", "mal");
+    try {
+      await rpc("cambiar_pin", { p_token: E.token, p_pin_hash_nuevo: await hashPin(E.yo.usuario, a) });
+      aviso("PIN cambiado", "bien");
+      $("#pin1").value = $("#pin2").value = "";
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+};
+
+/* ===================== 11. subir producto (vendedor e IZMA) ===================== */
+VISTAS.publicar = async () => {
+  E.media = [];
+  $("#vista").innerHTML =
+    '<div class="tarjeta"><h2>Subir producto a la bodega</h2>' +
+      '<p class="tenue" style="margin-top:0">Foto o video, precio de venta y cuántas piezas hay en existencia.</p>' +
+      '<label class="suelta"><b>Agregar fotos o video</b>' +
+        '<div class="tenue" style="color:#8A5A15">Puedes subir varias. Las fotos se comprimen solas.</div>' +
+        '<input type="file" id="archivos" accept="image/*,video/*" multiple hidden></label>' +
+      '<div class="barra" id="barra" hidden><i></i></div>' +
+      '<div class="tiras" id="tiras"></div>' +
+      '<label class="campo" style="margin-top:14px"><span>Qué es</span><input id="titulo" placeholder="Ej. Tenis Nike dama surtidos"></label>' +
+      '<label class="campo"><span>Detalle (tallas, colores, estado)</span><textarea id="desc"></textarea></label>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Precio por pieza</span><input id="precio" inputmode="decimal" placeholder="0.00"></label>' +
+        '<label class="campo"><span>Piezas en existencia</span><input id="cantidad" inputmode="numeric" value="1"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Categoría</span><input id="cat" list="cats" placeholder="Ropa, calzado, juguetes…">' +
+          '<datalist id="cats"><option>Ropa</option><option>Calzado</option><option>Juguetes</option><option>Hogar</option>' +
+          '<option>Herramienta</option><option>Electrónica</option><option>Bebé</option><option>Varios</option></datalist></label>' +
+        '<label class="campo"><span>Tienda o bodega</span><input id="origen" placeholder="Ej. bodega Otay"></label></div>' +
+      '<button class="btn lleno kraft" id="publicar">Publicar en la bodega</button></div>';
+
+  $("#archivos").onchange = async e => {
+    const files = [...e.target.files];
+    e.target.value = "";
+    const barra = $("#barra"), i = barra.querySelector("i");
+    barra.hidden = false;
+    for (let k = 0; k < files.length; k++) {
+      try { E.media.push(await subir(files[k])); }
+      catch (err) { aviso(err.message, "mal"); }
+      i.style.width = Math.round(((k + 1) / files.length) * 100) + "%";
+      pintarTiras();
+    }
+    setTimeout(() => { barra.hidden = true; i.style.width = "0"; }, 500);
+  };
+  pintarTiras();
+
+  $("#publicar").onclick = async () => {
+    const b = $("#publicar");
+    b.disabled = true; b.textContent = "Publicando…";
+    try {
+      const r = await rpc("publicar_producto", {
+        p_token: E.token,
+        p_datos: {
+          titulo: $("#titulo").value, descripcion: $("#desc").value,
+          categoria: $("#cat").value, precio: Number($("#precio").value || 0),
+          cantidad: parseInt($("#cantidad").value || "1", 10),
+          origen: $("#origen").value, media: E.media
+        }
+      });
+      if (!r.ok) throw new Error(r.motivo);
+      aviso("Publicado. Ya lo ven los clientes.", "bien");
+      ir(E.yo.rol === "admin" ? "productos" : "inventario");
+    } catch (err) {
+      aviso(err.message, "mal");
+      b.disabled = false; b.textContent = "Publicar en la bodega";
+    }
+  };
+};
+function pintarTiras() {
+  const c = $("#tiras");
+  if (!c) return;
+  c.innerHTML = E.media.map((m, i) => '<div class="tira">' +
+    (m.tipo === "video" ? '<video src="' + esc(m.url) + '" muted></video>' : '<img src="' + esc(m.url) + '" alt="">') +
+    '<button data-quitar="' + i + '" aria-label="quitar">×</button></div>').join("");
+  $$("[data-quitar]", c).forEach(b => b.onclick = () => { E.media.splice(+b.dataset.quitar, 1); pintarTiras(); });
+}
+
+VISTAS.inventario = async () => {
+  const d = await rpc("mis_productos", { p_token: E.token });
+  if (!d.items.length) {
+    $("#vista").innerHTML = '<div class="vacio"><h3>No has subido nada</h3>' +
+      "<p>Empieza con lo que traigas de Tijuana.</p>" +
+      '<button class="btn kraft" data-vista="publicar">Subir producto</button></div>';
+    return;
+  }
+  const vendido = d.items.reduce((s, p) => s + p.vendidos * p.precio, 0);
+  $("#vista").innerHTML =
+    '<div class="tablero">' +
+      '<div class="mosaico"><div class="cifra">' + d.items.length + "</div><span>productos subidos</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + d.items.reduce((s, p) => s + p.disponible, 0) + "</div><span>piezas en existencia</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + dinero(vendido) + "</div><span>vendido de lo mío</span></div></div>" +
+    '<div class="rejilla">' + d.items.map(fichaInventario).join("") + "</div>";
+  enlazarEditar(d.items);
+};
+function fichaInventario(p) {
+  const m = (p.media || [])[0];
+  return '<article class="pieza"><div class="lienzo">' +
+    (m ? (m.tipo === "video"
+      ? '<video src="' + esc(m.url) + '" muted playsinline preload="metadata"></video>'
+      : '<img src="' + esc(m.url) + '" alt="" loading="lazy">') : "") +
+    '<span class="cinta">' + esc(p.estado) + "</span></div>" +
+    '<div class="cuerpo"><div class="titulo">' + esc(p.titulo) + "</div>" +
+      '<div class="fila envolver">' +
+        '<span class="sello verde num">' + p.disponible + " en existencia</span>" +
+        '<span class="sello kraft num">' + p.apartados + " apartadas</span>" +
+        '<span class="sello num">' + p.vendidos + " vendidas</span></div>" +
+      '<div class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
+        '<button class="btn claro chico" data-editar="' + p.id + '">Editar</button></div>' +
+      '<div class="tenue">' + esc(p.origen || "") + " · " + fecha(p.creado_en) + "</div></div></article>";
+}
+function enlazarEditar(lista) {
+  $$("[data-editar]").forEach(b => b.onclick = () => {
+    const p = lista.find(x => x.id === b.dataset.editar) || {};
+    hoja("<h2>Editar producto</h2>" +
+      '<label class="campo"><span>Nombre</span><input id="e-titulo" value="' + esc(p.titulo || "") + '"></label>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Precio</span><input id="e-precio" inputmode="decimal" value="' + (p.precio || 0) + '"></label>' +
+        '<label class="campo"><span>Piezas totales</span><input id="e-cant" inputmode="numeric" value="' + (p.cantidad || 0) + '"></label></div>' +
+      '<label class="campo"><span>Estado</span><select id="e-estado">' +
+        '<option value="activo"' + (p.estado !== "oculto" ? " selected" : "") + ">Visible en la bodega</option>" +
+        '<option value="oculto"' + (p.estado === "oculto" ? " selected" : "") + ">Oculto</option></select></label>" +
+      '<div class="mensaje info">Tiene ' + (p.apartados || 0) + " apartadas y " + (p.vendidos || 0) + " vendidas.</div>" +
+      '<button class="btn lleno" id="e-guardar">Guardar</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#e-guardar").onclick = async () => {
+      try {
+        const r = await rpc("editar_producto", {
+          p_token: E.token, p_id: p.id,
+          p_datos: { titulo: $("#e-titulo").value, precio: Number($("#e-precio").value || 0),
+                     cantidad: parseInt($("#e-cant").value || "0", 10), estado: $("#e-estado").value }
+        });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Producto actualizado", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
+}
+
+/* ===================== 12. administración ===================== */
+VISTAS.resumen = async () => {
+  const r = await rpc("admin_resumen", { p_token: E.token });
+  E.datos.pendSol = r.solicitudes; E.datos.pendAbonos = r.abonos;
+  pintarNav();
+  $("#vista").innerHTML =
+    '<div class="tablero">' +
+      '<div class="mosaico ' + (r.abonos ? "alerta" : "") + '"><div class="cifra">' + r.abonos + "</div><span>depósitos por cobrar</span></div>" +
+      '<div class="mosaico ' + (r.solicitudes ? "alerta" : "") + '"><div class="cifra">' + r.solicitudes + "</div><span>solicitudes por revisar</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + r.por_enviar + "</div><span>pedidos por preparar</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + r.apartados + "</div><span>piezas apartadas ahora</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + r.productos + "</div><span>productos en existencia</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + r.clientes + "</div><span>clientes autorizados</span></div></div>" +
+    '<div class="tarjeta"><h2>Dinero</h2>' +
+      '<div class="fila entre"><span>Depósitos pendientes de cobrar</span><span class="cifra num">' + dinero(r.por_cobrar) + "</span></div>" +
+      '<div class="fila entre linea-arriba"><span>Saldo a favor de clientes</span><span class="cifra num">' + dinero(r.a_favor) + "</span></div>" +
+      '<div class="fila entre linea-arriba"><span>Lo que te deben</span><span class="cifra num" style="color:var(--sello)">' + dinero(r.deuda) + "</span></div>" +
+      '<div class="fila entre linea-arriba"><span>Venta de hoy</span><span class="cifra num">' + dinero(r.venta_hoy) + "</span></div>" +
+      '<div class="fila entre linea-arriba"><span>Venta del mes</span><span class="cifra num">' + dinero(r.venta_mes) + "</span></div></div>" +
+    '<div class="tarjeta"><h3>Reglas vigentes</h3>' +
+      '<p class="tenue" style="margin:0">Transferencias menores a ' + dinero(E.config.tope_transferencia) +
+      ". Retiro sin tarjeta por " + esc(E.config.banco_retiro) + " desde " + dinero(E.config.retiro_min) +
+      " en múltiplos de $" + E.config.retiro_multiplo + ". Apartado: " + E.config.minutos_apartado +
+      " minutos. Se cambian en Ajustes.</p></div>";
+};
+
+VISTAS.solicitudes = async () => {
+  const d = await rpc("admin_solicitudes", { p_token: E.token, p_estado: "pendiente" });
+  E.datos.pendSol = d.items.length;
+  pintarNav();
+  if (!d.items.length) {
+    $("#vista").innerHTML = '<div class="vacio"><h3>Sin solicitudes pendientes</h3>' +
+      "<p>Cuando alguien pida acceso aparece aquí para autorizarlo.</p></div>";
+    return;
+  }
+  $("#vista").innerHTML = d.items.map(s =>
+    '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(s.nombre) + "</h3>" +
+      '<span class="sello ' + (s.tipo_cliente === "foraneo" ? "kraft" : "verde") + '">' +
+      (s.tipo_cliente === "foraneo" ? "foráneo" : "local") + "</span></div>" +
+      '<p class="tenue" style="margin:4px 0">' + esc(s.telefono) + (s.ciudad ? " · " + esc(s.ciudad) : "") + " · " + fecha(s.creada_en) + "</p>" +
+      (s.paqueteria ? '<p class="tenue" style="margin:0">Paquetería: ' + esc(s.paqueteria) + "</p>" : "") +
+      (s.direccion ? '<p class="tenue" style="margin:0">Dirección: ' + esc(s.direccion) + "</p>" : "") +
+      (s.referencia ? '<p class="tenue" style="margin:0">Referencia: ' + esc(s.referencia) + "</p>" : "") +
+      '<div class="fila envolver linea-arriba">' +
+        '<button class="btn verde chico" data-aprobar="' + s.id + '" data-nombre="' + esc(s.nombre) + '">Autorizar</button>' +
+        '<button class="btn claro chico" data-rechazar="' + s.id + '">Rechazar</button>' +
+        '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' +
+          esc(s.telefono.replace(/\D/g, "")) + '">WhatsApp</a></div></div>').join("");
+
+  $$("[data-aprobar]").forEach(b => b.onclick = () => {
+    const sugerido = b.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .split(/\s+/).slice(0, 2).join("").replace(/[^a-z0-9]/g, "").slice(0, 14);
+    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    hoja("<h2>Autorizar a " + esc(b.dataset.nombre) + "</h2>" +
+      '<p class="tenue">Este usuario y PIN son los que le vas a pasar por WhatsApp.</p>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Usuario</span><input id="a-usuario" value="' + esc(sugerido) + '" autocapitalize="none"></label>' +
+        '<label class="campo"><span>PIN temporal</span><input id="a-pin" value="' + pin + '" inputmode="numeric"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Saldo a favor inicial</span><input id="a-saldo" inputmode="decimal" value="0"></label>' +
+        '<label class="campo"><span>Crédito autorizado</span><input id="a-limite" inputmode="decimal" value="0"></label></div>' +
+      '<button class="btn lleno verde" id="a-ok">Crear cuenta</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#a-ok").onclick = async () => {
+      const usuario = $("#a-usuario").value.trim(), pinv = $("#a-pin").value.trim();
+      if (!usuario || pinv.length < 4) return aviso("Falta usuario o PIN de 4 dígitos", "mal");
+      try {
+        const r = await rpc("admin_aprobar_solicitud", {
+          p_token: E.token, p_solicitud: b.dataset.aprobar, p_usuario: usuario,
+          p_pin_hash: await hashPin(usuario, pinv),
+          p_saldo: Number($("#a-saldo").value || 0), p_limite: Number($("#a-limite").value || 0)
+        });
+        if (!r.ok) throw new Error(r.motivo);
+        const texto = "Hola " + r.nombre + ", IZMA ENVÍOS ya autorizó tu cuenta.\nUsuario: " + r.usuario +
+                      "\nPIN: " + pinv + "\nEntra aquí: " + location.origin + location.pathname;
+        hoja("<h2>Cuenta lista</h2>" +
+          '<div class="mensaje kraft">Usuario <b>' + esc(r.usuario) + "</b> · PIN <b>" + esc(pinv) + "</b><br>" +
+          "Cópialo ahora: el PIN queda cifrado y no se vuelve a mostrar.</div>" +
+          '<a class="btn lleno verde" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' +
+            esc(String(r.telefono).replace(/\D/g, "")) + "?text=" + encodeURIComponent(texto) + '">Enviar por WhatsApp</a>' +
+          '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>');
+        pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
+  $$("[data-rechazar]").forEach(b => b.onclick = async () => {
+    const motivo = prompt("Motivo del rechazo (solo lo ve IZMA):", "");
+    if (motivo === null) return;
+    try {
+      await rpc("admin_rechazar_solicitud", { p_token: E.token, p_solicitud: b.dataset.rechazar, p_motivo: motivo });
+      aviso("Solicitud rechazada");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+};
+
+VISTAS.pagos = async () => {
+  const filtro = E.datos.filtroAbono === undefined ? "pendiente" : E.datos.filtroAbono;
+  const d = await rpc("admin_abonos", { p_token: E.token, p_estado: filtro });
+  const pend = await rpc("admin_abonos", { p_token: E.token, p_estado: "pendiente" });
+  E.datos.pendAbonos = pend.items.length;
+  E.config = d.config;
+  pintarNav();
+  const filtros = [["pendiente", "Por cobrar"], ["cobrado", "Cobrados"], ["vencido", "Vencidos"],
+                   ["rechazado", "Rechazados"], ["", "Todos"]];
+  $("#vista").innerHTML =
+    '<div class="filtros">' + filtros.map(f =>
+      '<button data-f="' + f[0] + '" aria-current="' + (filtro === f[0]) + '">' + f[1] + "</button>").join("") + "</div>" +
+    (d.items.map(b => {
+      const et = ESTADO_ABONO[b.estado] || [b.estado, ""];
+      const esRetiro = b.metodo === "retiro_sin_tarjeta";
+      const tel = String(b.telefono || "").replace(/\D/g, "");
+      return '<div class="tarjeta"><div class="fila entre envolver">' +
+          '<h3 style="margin:0">' + dinero(b.monto) + " · " + esc(b.cliente || "") + "</h3>" +
+          '<span class="sello ' + et[1] + '">' + et[0] + "</span></div>" +
+        '<p class="tenue" style="margin:4px 0">' + esc(b.usuario || "") + " · " + esc(b.telefono || "") +
+          " · " + fecha(b.creado_en) + " · saldo actual " + dinero(b.saldo) + "</p>" +
+        '<div class="fila envolver" style="align-items:flex-start">' +
+          '<img class="evidencia" src="' + esc(b.evidencia) + '" alt="" data-ver="' + esc(b.evidencia) + '">' +
+          '<div class="crece">' +
+            (esRetiro
+              ? "<div><b>Retiro sin tarjeta</b> · " + esc(b.banco) + "</div>" +
+                '<div class="num">Clave: <b>' + esc(b.codigo) + "</b>" + (b.celular ? " · cel " + esc(b.celular) : "") + "</div>" +
+                (b.estado === "pendiente" && b.vence_en
+                  ? '<div style="margin-top:5px"><span class="reloj" data-expira="' + b.vence_en + '">⏱ --:--</span>' +
+                    '<span class="tenue"> para retirarlo</span></div>'
+                  : (b.vence_en ? '<div class="tenue">Vigencia: ' + fecha(b.vence_en) + "</div>" : ""))
+              : "<div><b>Transferencia</b>" + (b.banco ? " · " + esc(b.banco) : "") + "</div>" +
+                (b.referencia ? '<div class="num">Referencia: ' + esc(b.referencia) + "</div>" : "")) +
+            (b.nota ? '<div class="tenue">Nota del cliente: ' + esc(b.nota) + "</div>" : "") +
+            (b.monto_cobrado != null ? '<div class="tenue">Cobrado: ' + dinero(b.monto_cobrado) + "</div>" : "") +
+            (b.nota_izma ? '<div class="tenue">IZMA: ' + esc(b.nota_izma) + "</div>" : "") +
+          "</div></div>" +
+        (b.estado === "pendiente" || b.estado === "vencido"
+          ? '<div class="fila envolver linea-arriba">' +
+            '<button class="btn verde chico" data-cobrar="' + b.id + '">Marcar cobrado</button>' +
+            '<button class="btn claro chico" data-rechazar-abono="' + b.id + '">Rechazar</button>' +
+            (tel ? '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' + tel +
+              "?text=" + encodeURIComponent("Hola " + b.cliente + ", sobre tu depósito de " + dinero(b.monto) + ": ") + '">WhatsApp</a>' : "") +
+            "</div>"
+          : "") +
+        "</div>";
+    }).join("") || '<div class="vacio"><h3>Nada en este filtro</h3></div>');
+
+  $$("[data-f]").forEach(b => b.onclick = () => { E.datos.filtroAbono = b.dataset.f; pintar(); });
+  $$("[data-cobrar]").forEach(b => b.onclick = () => {
+    const ab = d.items.find(x => x.id === b.dataset.cobrar);
+    hoja("<h2>Marcar como cobrado</h2>" +
+      '<p class="tenue">' + esc(ab.cliente) + " · " +
+        (ab.metodo === "retiro_sin_tarjeta" ? "retiro sin tarjeta, clave " + esc(ab.codigo) : "transferencia") + "</p>" +
+      '<label class="campo"><span>Monto que realmente entró</span><input id="cb-monto" inputmode="decimal" value="' + ab.monto + '"></label>' +
+      '<label class="campo"><span>Nota (opcional)</span><input id="cb-nota" placeholder="Ej. retirado en cajero Otay"></label>' +
+      '<div class="mensaje verde">Al guardar se le abona este monto al saldo a favor del cliente.</div>' +
+      '<button class="btn lleno verde" id="cb-ok">Cobrado y abonado</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#cb-ok").onclick = async () => {
+      try {
+        const r = await rpc("admin_resolver_abono", {
+          p_token: E.token, p_abono: ab.id, p_accion: "cobrado",
+          p_monto: Number($("#cb-monto").value || 0), p_nota: $("#cb-nota").value
+        });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja();
+        aviso("Abonado. Saldo del cliente: " + dinero(r.saldo), "bien");
+        pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
+  $$("[data-rechazar-abono]").forEach(b => b.onclick = async () => {
+    const motivo = prompt("¿Por qué lo rechazas? (lo ve el cliente)", "");
+    if (motivo === null) return;
+    try {
+      await rpc("admin_resolver_abono", { p_token: E.token, p_abono: b.dataset.rechazarAbono, p_accion: "rechazado", p_nota: motivo });
+      aviso("Depósito rechazado");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+};
+
+VISTAS.pedidos = async () => {
+  if (E.yo.rol === "cliente") return pedidosCliente();
+  const filtro = E.datos.filtroPedido || "";
+  const d = await rpc("admin_pedidos", { p_token: E.token, p_estado: filtro });
+  const filtros = [["", "Todos"], ["preparando", "Por preparar"], ["enviado", "Enviados"],
+                   ["entregado", "Entregados"], ["cancelado", "Cancelados"]];
+  $("#vista").innerHTML =
+    '<div class="filtros">' + filtros.map(f =>
+      '<button data-f="' + f[0] + '" aria-current="' + (filtro === f[0]) + '">' + f[1] + "</button>").join("") + "</div>" +
+    (d.items.map(p => {
+      const et = ESTADO_PEDIDO[p.estado] || [p.estado, ""];
+      const tel = String(p.telefono || "").replace(/\D/g, "");
+      return '<div class="tarjeta">' +
+        '<div class="fila entre envolver"><h3 style="margin:0">' + esc(p.folio) + " · " + esc(p.cliente) + "</h3>" +
+          '<span class="sello ' + et[1] + '">' + et[0] + "</span></div>" +
+        '<p class="tenue" style="margin:4px 0">' + esc(p.usuario) + " · " +
+          (p.tipo_cliente === "foraneo" ? "foráneo" : "local") + " · " + esc(p.telefono || "") + " · " + fecha(p.creado_en) +
+          " · saldo " + dinero(p.saldo) + "</p>" +
+        '<div class="linea-arriba">' + p.items.map(i =>
+          '<div class="fila entre" style="padding:3px 0">' +
+            '<span class="' + (i.estado === "rechazado" ? "tachado" : "") + '">' + i.cantidad + " × " + esc(i.titulo) + "</span>" +
+            '<span class="fila"><span class="num">' + dinero(i.precio * i.cantidad) + "</span>" +
+            (i.estado === "asignado"
+              ? '<button class="btn claro chico" data-no-alcanzo="' + i.id + '">No alcanzó</button>'
+              : '<span class="sello rojo">devuelto</span>') + "</span></div>").join("") + "</div>" +
+        '<div class="fila entre linea-arriba"><span>' +
+          (p.envio === "recoge" ? "Recoge en bodega" : "Paquetería, flete por cobrar") +
+          '</span><span class="cifra num">' + dinero(p.total) + "</span></div>" +
+        (p.direccion ? '<p class="tenue" style="margin:6px 0 0">Envío: ' + esc(p.direccion) +
+          (p.paqueteria ? " · " + esc(p.paqueteria) : "") + "</p>" : "") +
+        (p.notas ? '<p class="tenue" style="margin:2px 0 0">Nota del cliente: ' + esc(p.notas) + "</p>" : "") +
+        (p.guia ? '<p class="tenue" style="margin:2px 0 0">Guía: <b>' + esc(p.guia) + "</b></p>" : "") +
+        '<div class="fila envolver linea-arriba">' +
+          '<button class="btn chico" data-gestionar="' + p.id + '">Actualizar</button>' +
+          (tel ? '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' + tel +
+            "?text=" + encodeURIComponent("Hola " + p.cliente + ", sobre tu pedido " + p.folio + ": ") + '">WhatsApp</a>' : "") +
+        "</div></div>";
+    }).join("") || '<div class="vacio"><h3>Sin pedidos en este filtro</h3></div>');
+
+  $$("[data-f]").forEach(b => b.onclick = () => { E.datos.filtroPedido = b.dataset.f; pintar(); });
+  $$("[data-no-alcanzo]").forEach(b => b.onclick = async () => {
+    const motivo = prompt("¿Qué le decimos al cliente? (se le devuelve el importe a su saldo)", "No alcanzó mercancía");
+    if (motivo === null) return;
+    try {
+      const r = await rpc("admin_rechazar_item", { p_token: E.token, p_item: b.dataset.noAlcanzo, p_motivo: motivo });
+      if (!r.ok) throw new Error(r.motivo);
+      aviso("Partida devuelta al saldo del cliente", "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-gestionar]").forEach(b => b.onclick = () => {
+    const p = d.items.find(x => x.id === b.dataset.gestionar);
+    hoja("<h2>" + esc(p.folio) + "</h2>" +
+      '<label class="campo"><span>Estado</span><select id="g-estado">' +
+        Object.keys(ESTADO_PEDIDO).map(k =>
+          '<option value="' + k + '"' + (p.estado === k ? " selected" : "") + ">" + ESTADO_PEDIDO[k][0] + "</option>").join("") +
+      "</select></label>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>Paquetería</span><input id="g-paq" value="' + esc(p.paqueteria || "") + '"></label>' +
+        '<label class="campo"><span>Número de guía</span><input id="g-guia" value="' + esc(p.guia || "") + '"></label></div>' +
+      '<label class="campo"><span>Nota para el cliente</span><textarea id="g-nota">' + esc(p.notas_izma || "") + "</textarea></label>" +
+      '<div class="mensaje info">Si cancelas, la mercancía regresa al inventario y el importe vuelve al saldo del cliente.</div>' +
+      '<button class="btn lleno" id="g-ok">Guardar</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#g-ok").onclick = async () => {
+      try {
+        const r = await rpc("admin_actualizar_pedido", {
+          p_token: E.token, p_pedido: p.id,
+          p_datos: { estado: $("#g-estado").value, paqueteria: $("#g-paq").value,
+                     guia: $("#g-guia").value, notas_izma: $("#g-nota").value }
+        });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Pedido actualizado", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
+};
+
+VISTAS.productos = async () => {
+  const d = await rpc("admin_productos", { p_token: E.token, p_busqueda: E.busqueda });
+  $("#vista").innerHTML =
+    '<div class="buscador"><input id="q" placeholder="Buscar producto…" value="' + esc(E.busqueda) +
+      '"><button class="btn" id="bq">Buscar</button>' +
+      '<button class="btn kraft" data-vista="publicar">Subir</button></div>' +
+    '<div class="rejilla">' + (d.items.map(p => {
+      const m = (p.media || [])[0];
+      return '<article class="pieza"><div class="lienzo">' +
+        (m ? (m.tipo === "video"
+          ? '<video src="' + esc(m.url) + '" muted playsinline preload="metadata"></video>'
+          : '<img src="' + esc(m.url) + '" alt="" loading="lazy">') : "") +
+        '<span class="cinta">' + esc(p.estado) + "</span></div>" +
+        '<div class="cuerpo"><div class="titulo">' + esc(p.titulo) + "</div>" +
+          '<div class="tenue">Subió: ' + esc(p.vendedor) + " · " + esc(p.origen || "—") + "</div>" +
+          '<div class="fila envolver">' +
+            '<span class="sello verde num">' + p.disponible + " en existencia</span>" +
+            '<span class="sello kraft num">' + p.apartados + " apartadas</span>" +
+            '<span class="sello num">' + p.vendidos + " vendidas</span></div>" +
+          '<div class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
+            '<button class="btn claro chico" data-editar="' + p.id + '">Editar</button></div></div></article>';
+    }).join("") || '<div class="vacio"><h3>Sin productos</h3></div>') + "</div>";
+  $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
+  $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
+  enlazarEditar(d.items);
+};
+
+VISTAS.usuarios = async () => {
+  const filtro = E.datos.filtroRol === undefined ? "cliente" : E.datos.filtroRol;
+  const d = await rpc("admin_usuarios", { p_token: E.token, p_rol: filtro });
+  $("#vista").innerHTML =
+    '<div class="fila entre envolver" style="margin-bottom:12px">' +
+      '<div class="filtros" style="margin:0">' +
+        [["cliente", "Clientes"], ["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"]]
+          .map(r => '<button data-r="' + r[0] + '" aria-current="' + (filtro === r[0]) + '">' + r[1] + "</button>").join("") +
+      '</div><button class="btn chico kraft" id="nuevo">Crear usuario</button></div>' +
+    d.items.map(u => {
+      const debe = u.saldo < 0;
+      return '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(u.nombre) + "</h3>" +
+        '<span class="sello ' + (u.estado === "activo" ? "verde" : "rojo") + '">' + esc(u.estado) + "</span></div>" +
+        '<p class="tenue" style="margin:4px 0">' + esc(u.usuario) + " · " + esc(u.rol) +
+          (u.tipo_cliente ? " " + esc(u.tipo_cliente) : "") +
+          (u.telefono ? " · " + esc(u.telefono) : "") + (u.ciudad ? " · " + esc(u.ciudad) : "") + "</p>" +
+        (u.rol === "cliente"
+          ? '<div class="fila entre linea-arriba"><span>' + (debe ? "Debe" : "Saldo a favor") + "</span>" +
+            '<span class="cifra num" style="' + (debe ? "color:var(--sello)" : "") + '">' + dinero(Math.abs(u.saldo)) + "</span></div>" +
+            '<p class="tenue" style="margin:2px 0 0">Crédito autorizado ' + dinero(u.limite_credito || 0) +
+            " · " + u.pedidos + " compras · " + dinero(u.comprado) + " comprado</p>"
+          : "") +
+        '<p class="tenue" style="margin:2px 0 0">' + (u.ultimo_acceso ? "Entró " + fecha(u.ultimo_acceso) : "Nunca ha entrado") + "</p>" +
+        '<div class="fila envolver linea-arriba">' +
+          (u.rol === "cliente"
+            ? '<button class="btn chico" data-saldo="' + u.id + '" data-nombre="' + esc(u.nombre) + '">Ajustar saldo</button>' +
+              '<button class="btn claro chico" data-limite="' + u.id + '" data-valor="' + (u.limite_credito || 0) + '">Crédito</button>' : "") +
+          '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
+          '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
+            (u.estado === "activo" ? "Suspender" : "Reactivar") + "</button></div></div>";
+    }).join("");
+
+  $$("[data-r]").forEach(b => b.onclick = () => { E.datos.filtroRol = b.dataset.r; pintar(); });
+  $$("[data-saldo]").forEach(b => b.onclick = () => {
+    hoja("<h2>Ajustar saldo de " + esc(b.dataset.nombre) + "</h2>" +
+      '<p class="tenue">Positivo le abona, negativo le descuenta. Queda en su historial de movimientos.</p>' +
+      '<label class="campo"><span>Monto</span><input id="s-monto" inputmode="decimal" placeholder="Ej. 500 o -200"></label>' +
+      '<label class="campo"><span>Concepto</span><input id="s-concepto" value="Saldo a favor otorgado por IZMA"></label>' +
+      '<button class="btn lleno verde" id="s-ok">Aplicar</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#s-ok").onclick = async () => {
+      try {
+        const r = await rpc("admin_ajustar_saldo", {
+          p_token: E.token, p_usuario: b.dataset.saldo,
+          p_monto: Number($("#s-monto").value || 0), p_concepto: $("#s-concepto").value
+        });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Saldo actualizado: " + dinero(r.saldo), "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
+  $$("[data-limite]").forEach(b => b.onclick = async () => {
+    const v = prompt("Crédito autorizado (cuánto puede deber):", b.dataset.valor);
+    if (v === null) return;
+    try {
+      await rpc("admin_limite", { p_token: E.token, p_usuario: b.dataset.limite, p_limite: Number(v || 0) });
+      aviso("Crédito actualizado", "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-estado]").forEach(b => b.onclick = async () => {
+    try {
+      await rpc("admin_editar_usuario", { p_token: E.token, p_id: b.dataset.estado, p_datos: { estado: b.dataset.valor } });
+      aviso("Listo", "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-pin]").forEach(b => b.onclick = async () => {
+    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    try {
+      await rpc("admin_editar_usuario", {
+        p_token: E.token, p_id: b.dataset.pin, p_datos: { pin_hash: await hashPin(b.dataset.usuario, pin) }
+      });
+      hoja('<h2>PIN nuevo</h2><div class="mensaje kraft">Usuario <b>' + esc(b.dataset.usuario) + "</b> · PIN <b>" + pin +
+        "</b><br>Mándaselo por WhatsApp; no vuelve a mostrarse.</div>" +
+        '<button class="btn lleno" data-cerrar>Ya lo copié</button>');
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $("#nuevo").onclick = () => {
+    hoja("<h2>Crear usuario</h2>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>Usuario</span><input id="n-usuario" autocapitalize="none"></label>' +
+        '<label class="campo"><span>PIN</span><input id="n-pin" inputmode="numeric" value="' + Math.floor(1000 + Math.random() * 9000) + '"></label></div>' +
+      '<label class="campo"><span>Nombre</span><input id="n-nombre"></label>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Rol</span><select id="n-rol">' +
+          '<option value="cliente">Cliente</option><option value="vendedor">Vendedor autorizado</option>' +
+          '<option value="admin">Administrador</option></select></label>' +
+        '<label class="campo"><span>Tipo de cliente</span><select id="n-tipo">' +
+          '<option value="local">Local</option><option value="foraneo">Foráneo</option></select></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Saldo a favor inicial</span><input id="n-saldo" inputmode="decimal" value="0"></label>' +
+        '<label class="campo"><span>Crédito autorizado</span><input id="n-limite" inputmode="decimal" value="0"></label></div>' +
+      '<label class="campo"><span>WhatsApp</span><input id="n-tel"></label>' +
+      '<button class="btn lleno verde" id="n-ok">Crear</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#n-ok").onclick = async () => {
+      const usuario = $("#n-usuario").value.trim(), pin = $("#n-pin").value.trim();
+      if (!usuario || pin.length < 4) return aviso("Falta usuario o PIN", "mal");
+      try {
+        const r = await rpc("admin_crear_usuario", {
+          p_token: E.token, p_usuario: usuario, p_pin_hash: await hashPin(usuario, pin),
+          p_nombre: $("#n-nombre").value || usuario, p_rol: $("#n-rol").value,
+          p_tipo: $("#n-tipo").value, p_telefono: $("#n-tel").value,
+          p_saldo: Number($("#n-saldo").value || 0), p_limite: Number($("#n-limite").value || 0)
+        });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja();
+        aviso("Usuario " + usuario + " creado con PIN " + pin, "bien");
+        pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  };
+};
+
+VISTAS.ajustes = async () => {
+  const c = E.config;
+  $("#vista").innerHTML =
+    '<div class="tarjeta"><h2>Reglas de depósito</h2>' +
+      '<label class="campo"><span>Tope de transferencia (debe ser menor a)</span><input id="c-tope" inputmode="decimal" value="' + c.tope_transferencia + '"></label>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Retiro sin tarjeta desde</span><input id="c-rmin" inputmode="decimal" value="' + c.retiro_min + '"></label>' +
+        '<label class="campo"><span>Máximo por retiro</span><input id="c-rmax" inputmode="decimal" value="' + c.retiro_max + '"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Múltiplos de</span><input id="c-rmul" inputmode="numeric" value="' + c.retiro_multiplo + '"></label>' +
+        '<label class="campo"><span>Banco del retiro</span><input id="c-rbanco" value="' + esc(c.banco_retiro || "") + '"></label></div>' +
+      '<label class="campo"><span>Minutos de apartado</span><input id="c-min" inputmode="numeric" value="' + c.minutos_apartado + '"></label></div>' +
+    '<div class="tarjeta"><h2>Datos para transferencia</h2>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Banco</span><input id="c-banco" value="' + esc(c.banco_nombre || "") + '"></label>' +
+        '<label class="campo"><span>A nombre de</span><input id="c-benef" value="' + esc(c.banco_beneficiario || "") + '"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>CLABE</span><input id="c-clabe" value="' + esc(c.banco_clabe || "") + '"></label>' +
+        '<label class="campo"><span>Tarjeta</span><input id="c-tarjeta" value="' + esc(c.banco_tarjeta || "") + '"></label></div></div>' +
+    '<div class="tarjeta"><h2>Contacto y avisos</h2>' +
+      '<label class="campo"><span>WhatsApp de pedidos</span><input id="c-wa" value="' + esc(c.whatsapp_pedidos || "") + '" placeholder="52664…"></label>' +
+      '<label class="campo"><span>Aviso en la bodega (lo ven los clientes)</span><textarea id="c-aviso">' + esc(c.aviso || "") + "</textarea></label>" +
+      '<button class="btn lleno" id="c-guardar">Guardar ajustes</button></div>' +
+    (MODO_DEMO ? '<div class="tarjeta"><h2>Datos de prueba</h2>' +
+      '<p class="tenue" style="margin-top:0">Estás en modo demostración: todo vive en este navegador.</p>' +
+      '<button class="btn rojo" id="c-reset">Reiniciar datos de prueba</button></div>' : "");
+
+  $("#c-guardar").onclick = async () => {
+    try {
+      const r = await rpc("admin_guardar_config", {
+        p_token: E.token,
+        p_datos: {
+          minutos_apartado: parseInt($("#c-min").value || "3", 10),
+          tope_transferencia: Number($("#c-tope").value || 499),
+          retiro_min: Number($("#c-rmin").value || 500),
+          retiro_max: Number($("#c-rmax").value || 6000),
+          retiro_multiplo: Number($("#c-rmul").value || 50),
+          banco_retiro: $("#c-rbanco").value,
+          banco_nombre: $("#c-banco").value, banco_beneficiario: $("#c-benef").value,
+          banco_clabe: $("#c-clabe").value, banco_tarjeta: $("#c-tarjeta").value,
+          whatsapp_pedidos: $("#c-wa").value, aviso: $("#c-aviso").value
+        }
+      });
+      if (!r.ok) throw new Error(r.motivo);
+      E.config = r.config;
+      aviso("Ajustes guardados", "bien");
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+  if ($("#c-reset")) $("#c-reset").onclick = async () => {
+    if (!confirm("¿Borrar todos los datos de prueba y volver a empezar?")) return;
+    await reiniciarBD();
+    salirLocal();
+    aviso("Datos de prueba reiniciados", "bien");
+  };
+};
+
+/* ===================== 13. relojes ===================== */
+setInterval(() => {
+  $$("[data-expira]").forEach(el => {
+    const falta = new Date(el.dataset.expira) - Date.now();
+    if (falta <= 0) {
+      el.textContent = "⏱ vencido";
+      if (!el.dataset.avisado) {
+        el.dataset.avisado = "1";
+        if (el.dataset.tipo === "apartado") aviso("Se venció tu apartado", "mal");
+        pintar();
+      }
+      return;
+    }
+    const s = Math.floor(falta / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    el.textContent = h >= 1
+      ? "⏱ " + h + " h " + String(m).padStart(2, "0") + " min"
+      : "⏱ " + String(m).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+    if (!el.classList.contains("calmo")) el.classList.toggle("tibio", s > 60);
+  });
+}, 1000);
+
+setInterval(() => {
+  if (E.yo && E.vista === "bodega" && document.visibilityState === "visible" && !$("#capa").classList.contains("abierta")) pintar();
+}, 25000);
+
+/* ===================== 14. errores visibles ===================== */
+function fallo(msj) {
+  const caja = $("#claves-demo");
+  if (caja) caja.innerHTML = '<div class="mensaje rojo" style="margin-top:14px"><b>Algo falló</b><br>' + esc(msj) + "</div>";
+  aviso(msj, "mal");
+}
+window.addEventListener("error", e => fallo(e.message || "Error inesperado"));
+window.addEventListener("unhandledrejection", e => fallo((e.reason && e.reason.message) || "Error inesperado"));
+
+/* ===================== 15. arranque ===================== */
+(async () => {
+  try {
+  if (MODO_DEMO) {
+    await cargarBD();
+    $("#claves-demo").innerHTML =
+      '<div class="mensaje kraft" style="margin-top:14px"><b>Cuentas de prueba</b> (PIN 1234)<br>' +
+      "admin · vendedor · maria (local, $1,200 de saldo) · jose (foráneo, $350)</div>";
+  }
+  if (!E.token) return;
+  try {
+    const s = await rpc("sesion", { p_token: E.token });
+    if (!s.ok) return salirLocal();
+    E.yo = s.usuario; E.config = s.config;
+    arrancarApp();
+  } catch { salirLocal(); }
+  } catch (err) { fallo(err.message); }
+})();
+</script>
+</body>
+</html>
