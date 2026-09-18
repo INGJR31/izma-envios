@@ -151,6 +151,12 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
 .mensaje.rojo{background:var(--sello-claro);color:var(--sello)}
 .mensaje.verde{background:var(--verde-claro);color:var(--verde)}
 .cargando{text-align:center;padding:40px;color:var(--tinta-3)}
+.ticket{font-family:'Barlow Condensed',sans-serif;border:1px solid var(--linea);border-radius:var(--r);padding:16px;background:#fff}
+.ticket h3{font-size:22px;margin:0}
+.ticket .lin{display:flex;justify-content:space-between;gap:10px;font-family:Inter,sans-serif;font-size:14px;padding:3px 0}
+.ticket .corte{border-top:2px dashed var(--linea);margin-top:12px;padding-top:12px}
+.ticket .final{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--linea);margin-top:8px;padding-top:8px}
+.ticket .final b{font-size:26px;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -373,7 +379,7 @@ async function subir(file) {
 }
 
 /* ===================== 4. backend de prueba ===================== */
-const LLAVE_DEMO = "izma_demo_v2";
+const LLAVE_DEMO = "izma_demo_v3";
 let BD = null;
 
 function guardarBD() {
@@ -400,10 +406,17 @@ async function semillaBD() {
     { tipo_cliente: "foraneo", telefono: "9615550022", ciudad: "Tuxtla Gutiérrez", saldo: 350, limite_credito: 0,
       paqueteria: "Castores", direccion: "Av. Central 123, col. Centro, Tuxtla" });
 
+  const ventaDemo = {
+    id: uid(), nombre: "Bodega Otay · martes", lugar: "Bodega Otay, Tijuana",
+    vendedor_id: vend.id, comision_pct: 10, estado: "abierta",
+    folio_ticket: "", creado_en: ahora(), cerrado_en: null
+  };
+
   const prod = (titulo, categoria, precio, cantidad, origen, color, quien, descripcion = "") => ({
     id: uid(), titulo, descripcion, categoria, precio, cantidad, disponible: cantidad, vendidos: 0,
     origen, media: [{ url: fotoDemo(titulo, color), tipo: "foto" }],
-    vendedor_id: quien.id, estado: cantidad ? "activo" : "agotado", creado_en: ahora()
+    vendedor_id: quien.id, venta_id: quien.id === vend.id ? ventaDemo.id : null,
+    estado: cantidad ? "activo" : "agotado", creado_en: ahora()
   });
 
   const mov = (u, tipo, monto, concepto) => ({
@@ -413,6 +426,7 @@ async function semillaBD() {
   return {
     config: {
       minutos_apartado: 3,
+      comision_pct: 10,
       tope_transferencia: 499,
       retiro_min: 500, retiro_max: 6000, retiro_multiplo: 50,
       banco_retiro: "BBVA Bancomer",
@@ -437,7 +451,7 @@ async function semillaBD() {
       prod("Licuadora Ninja", "Hogar", 950, 1, "Bodega IZMA", "#4A4A6A", admin, "Vaso completo"),
       prod("Tenis niño Skechers", "Calzado", 380, 0, "Bodega La Mesa", "#5C6270", vend)
     ],
-    apartados: [], pedidos: [], items: [], abonos: [],
+    apartados: [], pedidos: [], items: [], abonos: [], ventas: [ventaDemo], folio_ticket: 0,
     movimientos: [mov(maria, "ajuste", 1200, "Saldo a favor inicial"), mov(jose, "ajuste", 350, "Saldo a favor inicial")]
   };
 }
@@ -481,6 +495,43 @@ function movimiento(u, tipo, monto, concepto, ref) {
                         ref: ref || "", saldo: u.saldo, creado_en: ahora() });
 }
 const apartadasDe = id => BD.apartados.filter(a => a.estado === "activo" && a.producto_id === id).reduce((s, a) => s + a.cantidad, 0);
+
+/* Corte de una jornada de venta: vendido, comisión del vendedor y lo que va a IZMA */
+function resumenVenta(v) {
+  const prods = BD.productos.filter(p => p.venta_id === v.id);
+  const ids = prods.map(p => p.id);
+  const partidas = BD.items.filter(i => ids.includes(i.producto_id));
+  const asignadas = partidas.filter(i => i.estado === "asignado");
+  const vendido = redondea(asignadas.reduce((s, i) => s + i.precio * i.cantidad, 0));
+  const comision = redondea(vendido * Number(v.comision_pct || 0) / 100);
+  return {
+    productos: prods.length,
+    piezas: prods.reduce((s, p) => s + p.cantidad, 0),
+    disponibles: prods.reduce((s, p) => s + p.disponible, 0),
+    partidas: partidas.length,
+    por_confirmar: asignadas.filter(i => !i.confirmado).length,
+    rechazadas: partidas.length - asignadas.length,
+    vendido, comision, a_izma: redondea(vendido - comision)
+  };
+}
+
+/* Regresa una partida al inventario y el importe al saldo del cliente */
+function devolverPartida(i, motivo) {
+  const ped = BD.pedidos.find(x => x.id === i.pedido_id);
+  const cli = BD.usuarios.find(x => x.id === ped.usuario_id);
+  const pr = BD.productos.find(x => x.id === i.producto_id);
+  if (pr) {
+    pr.disponible += i.cantidad;
+    pr.vendidos = Math.max(0, pr.vendidos - i.cantidad);
+    if (pr.estado === "agotado") pr.estado = "activo";
+  }
+  i.estado = "rechazado";
+  i.motivo = motivo || "No alcanzó mercancía";
+  const importe = redondea(i.precio * i.cantidad);
+  ped.total = redondea(ped.total - importe);
+  movimiento(cli, "devolucion", importe, "No alcanzó: " + i.titulo + " (" + ped.folio + ")", ped.folio);
+  guardarBD();
+}
 
 const LOCAL = {
   login({ p_usuario, p_pin_hash }) {
@@ -686,15 +737,122 @@ const LOCAL = {
   publicar_producto({ p_token, p_datos }) {
     const u = exige(p_token, ["vendedor", "admin"]);
     if (!String(p_datos.titulo || "").trim()) return { ok: false, motivo: "Ponle un nombre al producto" };
+    const v = BD.ventas.find(x => x.vendedor_id === u.id && x.estado === "abierta");
+    if (!v && u.rol === "vendedor")
+      return { ok: false, motivo: "Abre primero una venta para subir productos" };
     const cant = Math.max(1, parseInt(p_datos.cantidad || 1, 10));
     BD.productos.push({
       id: uid(), titulo: p_datos.titulo.trim(), descripcion: p_datos.descripcion || "",
       categoria: (p_datos.categoria || "").trim() || "General", precio: Number(p_datos.precio || 0),
-      cantidad: cant, disponible: cant, vendidos: 0, origen: p_datos.origen || "",
-      media: p_datos.media || [], vendedor_id: u.id, estado: "activo", creado_en: ahora()
+      cantidad: cant, disponible: cant, vendidos: 0,
+      origen: p_datos.origen || (v ? v.lugar : ""),
+      media: p_datos.media || [], vendedor_id: u.id, venta_id: v ? v.id : null,
+      estado: "activo", creado_en: ahora()
     });
     guardarBD();
+    return { ok: true, venta: v ? v.nombre : "" };
+  },
+
+  /* ---- jornadas de venta ---- */
+  ventas({ p_token }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    liberar();
+    const items = BD.ventas.filter(v => u.rol === "admin" || v.vendedor_id === u.id)
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(v => Object.assign({}, v, resumenVenta(v), {
+        vendedor: (BD.usuarios.find(x => x.id === v.vendedor_id) || {}).nombre || "IZMA"
+      }));
+    return { ok: true, items, comision_pct: BD.config.comision_pct };
+  },
+  abrir_venta({ p_token, p_datos }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    const d = p_datos || {};
+    if (BD.ventas.some(v => v.vendedor_id === u.id && v.estado === "abierta"))
+      return { ok: false, motivo: "Ya tienes una venta abierta. Ciérrala antes de abrir otra." };
+    if (!String(d.nombre || "").trim()) return { ok: false, motivo: "Ponle nombre a la venta" };
+    const v = {
+      id: uid(), nombre: d.nombre.trim(), lugar: d.lugar || "", vendedor_id: u.id,
+      comision_pct: Number(d.comision_pct != null ? d.comision_pct : BD.config.comision_pct),
+      estado: "abierta", folio_ticket: "", creado_en: ahora(), cerrado_en: null
+    };
+    BD.ventas.push(v);
+    guardarBD();
+    return { ok: true, id: v.id };
+  },
+  venta_detalle({ p_token, p_venta }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    const v = BD.ventas.find(x => x.id === p_venta);
+    if (!v) return { ok: false, motivo: "Venta no encontrada" };
+    if (u.rol === "vendedor" && v.vendedor_id !== u.id) return { ok: false, motivo: "Esa venta no es tuya" };
+    const productos = BD.productos.filter(p => p.venta_id === v.id)
+      .map(p => Object.assign({}, p, { apartados: apartadasDe(p.id) }));
+    const ids = productos.map(p => p.id);
+    const partidas = BD.items.filter(i => ids.includes(i.producto_id)).map(i => {
+      const ped = BD.pedidos.find(x => x.id === i.pedido_id) || {};
+      const c = BD.usuarios.find(x => x.id === ped.usuario_id) || {};
+      return Object.assign({}, i, {
+        cliente: c.nombre || "", usuario: c.usuario || "", telefono: c.telefono || "",
+        tipo_cliente: c.tipo_cliente || "", folio: ped.folio || "", fecha: ped.creado_en || ""
+      });
+    }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+    return {
+      ok: true, partidas, productos,
+      venta: Object.assign({}, v, resumenVenta(v), {
+        vendedor: (BD.usuarios.find(x => x.id === v.vendedor_id) || {}).nombre || "IZMA"
+      })
+    };
+  },
+  resolver_partida({ p_token, p_item, p_accion, p_motivo }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    const i = BD.items.find(x => x.id === p_item);
+    if (!i) return { ok: false, motivo: "Partida no encontrada" };
+    const pr = BD.productos.find(x => x.id === i.producto_id) || {};
+    if (u.rol === "vendedor" && pr.vendedor_id !== u.id)
+      return { ok: false, motivo: "Esa partida no es de tus productos" };
+    if (i.estado !== "asignado") return { ok: false, motivo: "Esa partida ya está rechazada" };
+    if (p_accion === "confirmar") { i.confirmado = true; guardarBD(); return { ok: true }; }
+    devolverPartida(i, p_motivo);
     return { ok: true };
+  },
+  cerrar_venta({ p_token, p_venta }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    const v = BD.ventas.find(x => x.id === p_venta);
+    if (!v) return { ok: false, motivo: "Venta no encontrada" };
+    if (u.rol === "vendedor" && v.vendedor_id !== u.id) return { ok: false, motivo: "Esa venta no es tuya" };
+    if (v.estado === "cerrada") return { ok: false, motivo: "Esa venta ya está cerrada" };
+    liberar();
+    const r = resumenVenta(v);
+    BD.folio_ticket = (BD.folio_ticket || 0) + 1;
+    const f = new Date();
+    v.folio_ticket = "TK" + String(f.getFullYear()).slice(2) + String(f.getMonth() + 1).padStart(2, "0") +
+                     String(f.getDate()).padStart(2, "0") + String(BD.folio_ticket).padStart(3, "0");
+    v.estado = "cerrada";
+    v.cerrado_en = ahora();
+    v.corte = r;
+    BD.productos.filter(p => p.venta_id === v.id && p.estado === "activo" && p.disponible > 0)
+      .forEach(p => p.estado = "oculto");
+    guardarBD();
+    return { ok: true, folio: v.folio_ticket };
+  },
+  ticket({ p_token, p_venta }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    const v = BD.ventas.find(x => x.id === p_venta);
+    if (!v) return { ok: false, motivo: "Venta no encontrada" };
+    if (u.rol === "vendedor" && v.vendedor_id !== u.id) return { ok: false, motivo: "Esa venta no es tuya" };
+    const ids = BD.productos.filter(p => p.venta_id === v.id).map(p => p.id);
+    const lineas = BD.items.filter(i => ids.includes(i.producto_id) && i.estado === "asignado").map(i => {
+      const ped = BD.pedidos.find(x => x.id === i.pedido_id) || {};
+      const c = BD.usuarios.find(x => x.id === ped.usuario_id) || {};
+      return { titulo: i.titulo, precio: i.precio, cantidad: i.cantidad,
+               importe: redondea(i.precio * i.cantidad), cliente: c.nombre || "",
+               folio: ped.folio || "", fecha: ped.creado_en || "" };
+    });
+    return {
+      ok: true, lineas,
+      venta: Object.assign({}, v, resumenVenta(v), {
+        vendedor: (BD.usuarios.find(x => x.id === v.vendedor_id) || {}).nombre || "IZMA"
+      })
+    };
   },
   mis_productos({ p_token }) {
     const u = exige(p_token, ["vendedor", "admin"]);
@@ -908,20 +1066,7 @@ const LOCAL = {
     exige(p_token, ["admin"]);
     const i = BD.items.find(x => x.id === p_item);
     if (!i || i.estado !== "asignado") return { ok: false, motivo: "Esa partida ya no está asignada" };
-    const p = BD.pedidos.find(x => x.id === i.pedido_id);
-    const u = BD.usuarios.find(x => x.id === p.usuario_id);
-    const pr = BD.productos.find(x => x.id === i.producto_id);
-    if (pr) {
-      pr.disponible += i.cantidad;
-      pr.vendidos = Math.max(0, pr.vendidos - i.cantidad);
-      if (pr.estado === "agotado") pr.estado = "activo";
-    }
-    i.estado = "rechazado";
-    i.motivo = p_motivo || "No alcanzó mercancía";
-    const importe = redondea(i.precio * i.cantidad);
-    p.total = redondea(p.total - importe);
-    movimiento(u, "devolucion", importe, "No alcanzó: " + i.titulo + " (" + p.folio + ")", p.folio);
-    guardarBD();
+    devolverPartida(i, p_motivo);
     return { ok: true };
   },
   admin_productos({ p_token, p_busqueda }) {
@@ -1009,9 +1154,10 @@ $("#form-solicitar").addEventListener("submit", async e => {
 /* ===================== 7. navegación ===================== */
 const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"], ["cuenta", "Mi cuenta"]],
-  vendedor: [["publicar", "Subir producto"], ["inventario", "Lo que subí"], ["cuenta", "Mi cuenta"]],
+  vendedor: [["ventas", "Mis ventas"], ["publicar", "Subir producto"], ["inventario", "Lo que subí"], ["cuenta", "Mi cuenta"]],
   admin: [["resumen", "Resumen"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
-          ["publicar", "Subir producto"], ["productos", "Productos"], ["usuarios", "Clientes"], ["ajustes", "Ajustes"]]
+          ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
+          ["usuarios", "Clientes"], ["ajustes", "Ajustes"]]
 };
 function pintarNav() {
   const rolTexto = E.yo.rol === "cliente"
@@ -1253,6 +1399,11 @@ VISTAS.saldo = async () => {
   E.config = d.config; E.yo.saldo = d.saldo;
   pintarNav();
   const debe = d.saldo < 0;
+  const suma = (arr, f) => redondea(arr.filter(f).reduce((a, m) => a + Math.abs(Number(m.monto)), 0));
+  const abonado  = suma(d.movimientos, m => m.tipo === "abono");
+  const gastado  = suma(d.movimientos, m => m.tipo === "compra");
+  const devuelto = suma(d.movimientos, m => m.tipo === "devolucion");
+  const pendiente = redondea(d.abonos.filter(b => b.estado === "pendiente").reduce((a, b) => a + Number(b.monto), 0));
   $("#vista").innerHTML =
     '<div class="monedero ' + (debe ? "debe" : "") + '">' +
       '<div class="rotulo">' + (debe ? "Lo que le debes a IZMA" : "Tu saldo a favor") + "</div>" +
@@ -1261,7 +1412,13 @@ VISTAS.saldo = async () => {
       '<div class="fila"><button class="btn kraft" id="abonar-t">Abonar por transferencia</button>' +
       '<button class="btn claro" id="abonar-r">Retiro sin tarjeta</button></div>' +
     "</div>" +
-    '<div class="tarjeta"><h2>Depósitos que mandaste</h2>' +
+    '<div class="tablero" style="margin-top:12px">' +
+      '<div class="mosaico"><div class="cifra">' + dinero(abonado) + "</div><span>total abonado</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + dinero(gastado) + "</div><span>total comprado</span></div>" +
+      (devuelto ? '<div class="mosaico"><div class="cifra">' + dinero(devuelto) + "</div><span>devuelto por no alcanzar</span></div>" : "") +
+      (pendiente ? '<div class="mosaico alerta"><div class="cifra">' + dinero(pendiente) + "</div><span>depósitos sin cobrar</span></div>" : "") +
+    "</div>" +
+    '<div class="tarjeta"><h2>Historial de pagos</h2>' +
       (d.abonos.length ? d.abonos.map(fichaAbonoCliente).join("")
         : '<p class="tenue" style="margin:0">Todavía no registras depósitos. Manda uno y IZMA lo cobra.</p>') + "</div>" +
     '<div class="tarjeta"><h2>Movimientos</h2>' +
@@ -1384,7 +1541,20 @@ async function pedidosCliente() {
       '<button class="btn" data-vista="bodega">Ir a la bodega</button></div>';
     return;
   }
-  $("#vista").innerHTML = d.pedidos.map(p => {
+  const vivos = d.pedidos.filter(p => p.estado !== "cancelado");
+  const gastado = vivos.reduce((a, p) => a + Number(p.total), 0);
+  const piezas = vivos.reduce((a, p) => a + p.items.filter(i => i.estado === "asignado")
+                                                   .reduce((b, i) => b + i.cantidad, 0), 0);
+  const noAlcanzo = d.pedidos.reduce((a, p) => a + p.items.filter(i => i.estado === "rechazado").length, 0);
+
+  $("#vista").innerHTML =
+    '<div class="tablero">' +
+      '<div class="mosaico"><div class="cifra">' + vivos.length + "</div><span>compras</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + piezas + "</div><span>piezas que alcanzaste</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + dinero(gastado) + "</div><span>total comprado</span></div>" +
+      (noAlcanzo ? '<div class="mosaico"><div class="cifra">' + noAlcanzo + "</div><span>partidas que no alcanzaste</span></div>" : "") +
+    "</div>" +
+    d.pedidos.map(p => {
     const et = ESTADO_PEDIDO[p.estado] || [p.estado, ""];
     const asignados = p.items.filter(i => i.estado === "asignado");
     const rechazados = p.items.filter(i => i.estado === "rechazado");
@@ -1512,6 +1682,203 @@ function pintarTiras() {
     (m.tipo === "video" ? '<video src="' + esc(m.url) + '" muted></video>' : '<img src="' + esc(m.url) + '" alt="">') +
     '<button data-quitar="' + i + '" aria-label="quitar">×</button></div>').join("");
   $$("[data-quitar]", c).forEach(b => b.onclick = () => { E.media.splice(+b.dataset.quitar, 1); pintarTiras(); });
+}
+
+/* ===== jornadas de venta y ticket de corte ===== */
+VISTAS.ventas = async () => {
+  const d = await rpc("ventas", { p_token: E.token });
+  const mias = d.items.filter(v => E.yo.rol === "admin" || v.vendedor_id === E.yo.id);
+  const tengoAbierta = mias.some(v => v.estado === "abierta" && v.vendedor_id === E.yo.id);
+  $("#vista").innerHTML =
+    '<div class="fila entre envolver" style="margin-bottom:12px">' +
+      "<h2 style=\"margin:0\">Jornadas de venta</h2>" +
+      (tengoAbierta ? '<span class="sello kraft">Tienes una venta abierta</span>'
+                    : '<button class="btn kraft chico" id="abrir">Abrir venta nueva</button>') + "</div>" +
+    (d.items.length ? d.items.map(v => {
+      const abierta = v.estado === "abierta";
+      return '<div class="tarjeta">' +
+        '<div class="fila entre envolver"><h3 style="margin:0">' + esc(v.nombre) + "</h3>" +
+          '<span class="sello ' + (abierta ? "verde" : "") + '">' +
+          (abierta ? "abierta" : "cerrada · " + esc(v.folio_ticket || "")) + "</span></div>" +
+        '<p class="tenue" style="margin:4px 0">' + esc(v.vendedor) + (v.lugar ? " · " + esc(v.lugar) : "") +
+          " · " + fecha(v.creado_en) + (v.cerrado_en ? " → " + fecha(v.cerrado_en) : "") + "</p>" +
+        '<div class="fila envolver">' +
+          '<span class="sello num">' + v.productos + " productos</span>" +
+          '<span class="sello verde num">' + v.disponibles + " en existencia</span>" +
+          (v.por_confirmar ? '<span class="sello kraft num">' + v.por_confirmar + " por confirmar</span>" : "") +
+          (v.rechazadas ? '<span class="sello rojo num">' + v.rechazadas + " no alcanzaron</span>" : "") + "</div>" +
+        '<div class="fila entre linea-arriba"><span>Vendido</span><span class="cifra num">' + dinero(v.vendido) + "</span></div>" +
+        '<div class="fila entre"><span class="tenue">Comisión vendedor ' + v.comision_pct + "%</span>" +
+          '<span class="num">' + dinero(v.comision) + "</span></div>" +
+        '<div class="fila entre"><span class="tenue">A pagar a IZMA</span><b class="num">' + dinero(v.a_izma) + "</b></div>" +
+        '<div class="fila envolver linea-arriba">' +
+          '<button class="btn chico" data-detalle="' + v.id + '">Partidas y productos</button>' +
+          (abierta ? '<button class="btn verde chico" data-cerrar-venta="' + v.id + '">Cerrar y generar ticket</button>'
+                   : '<button class="btn claro chico" data-ticket="' + v.id + '">Ver ticket</button>') +
+        "</div></div>";
+    }).join("") : '<div class="vacio"><h3>Todavía no hay ventas</h3><p>Cuando entren a una bodega, abran la venta con su nombre y suban ahí la mercancía.</p></div>');
+
+  if ($("#abrir")) $("#abrir").onclick = () => {
+    const hoy = new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "short" });
+    hoja("<h2>Abrir venta</h2>" +
+      '<label class="campo"><span>Nombre de la venta</span><input id="v-nombre" value="' + esc(hoy) + '"></label>' +
+      '<label class="campo"><span>Bodega o tienda</span><input id="v-lugar" placeholder="Ej. Bodega Otay"></label>' +
+      '<label class="campo"><span>Comisión del vendedor (%)</span><input id="v-pct" inputmode="decimal" value="' + d.comision_pct + '"></label>' +
+      '<div class="mensaje info">Todo lo que subas mientras esté abierta queda en esta venta. Al cerrarla se genera el ticket con el corte.</div>' +
+      '<button class="btn lleno kraft" id="v-ok">Abrir venta</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#v-ok").onclick = async () => {
+      try {
+        const r = await rpc("abrir_venta", { p_token: E.token, p_datos: {
+          nombre: $("#v-nombre").value, lugar: $("#v-lugar").value, comision_pct: Number($("#v-pct").value || 0) } });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Venta abierta. Ya puedes subir mercancía.", "bien");
+        E.datos.venta = r.id; ir("venta");
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  };
+  $$("[data-detalle]").forEach(b => b.onclick = () => { E.datos.venta = b.dataset.detalle; ir("venta"); });
+  $$("[data-ticket]").forEach(b => b.onclick = () => verTicket(b.dataset.ticket));
+  $$("[data-cerrar-venta]").forEach(b => b.onclick = async () => {
+    const v = d.items.find(x => x.id === b.dataset.cerrarVenta);
+    if (v.por_confirmar && !confirm("Quedan " + v.por_confirmar + " partidas sin confirmar. ¿Cerrar de todos modos?")) return;
+    if (!confirm("Al cerrar se genera el ticket y lo que sobró se oculta del catálogo. ¿Cerramos?")) return;
+    try {
+      const r = await rpc("cerrar_venta", { p_token: E.token, p_venta: v.id });
+      if (!r.ok) throw new Error(r.motivo);
+      aviso("Venta cerrada · ticket " + r.folio, "bien");
+      verTicket(v.id);
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+};
+
+VISTAS.venta = async () => {
+  const d = await rpc("venta_detalle", { p_token: E.token, p_venta: E.datos.venta });
+  if (!d.ok) throw new Error(d.motivo);
+  const v = d.venta;
+  const abierta = v.estado === "abierta";
+  const pend = d.partidas.filter(i => i.estado === "asignado" && !i.confirmado);
+  const conf = d.partidas.filter(i => i.estado === "asignado" && i.confirmado);
+  const rech = d.partidas.filter(i => i.estado === "rechazado");
+
+  const renglonPartida = (i, acciones) =>
+    '<div class="renglon"><div class="crece">' +
+      '<div style="font-weight:600">' + i.cantidad + " × " + esc(i.titulo) + "</div>" +
+      '<div class="tenue">' + esc(i.cliente) + " · " + esc(i.folio) + " · " + fecha(i.fecha) +
+        (i.motivo ? " · " + esc(i.motivo) : "") + "</div>" +
+      (acciones ? '<div class="fila" style="margin-top:6px">' +
+        '<button class="btn verde chico" data-si="' + i.id + '">Sí alcanzó</button>' +
+        '<button class="btn claro chico" data-no="' + i.id + '">No alcanzó</button></div>' : "") +
+    '</div><div class="num" style="font-weight:600">' + dinero(i.precio * i.cantidad) + "</div></div>";
+
+  $("#vista").innerHTML =
+    '<button class="btn claro chico" data-vista="ventas" style="margin-bottom:12px">← Todas las ventas</button>' +
+    '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">' + esc(v.nombre) + "</h2>" +
+      '<span class="sello ' + (abierta ? "verde" : "") + '">' + (abierta ? "abierta" : "cerrada") + "</span></div>" +
+      '<p class="tenue" style="margin:4px 0">' + esc(v.vendedor) + (v.lugar ? " · " + esc(v.lugar) : "") + " · " + fecha(v.creado_en) + "</p>" +
+      '<div class="fila entre linea-arriba"><span>Vendido</span><span class="cifra num">' + dinero(v.vendido) + "</span></div>" +
+      '<div class="fila entre"><span class="tenue">Comisión ' + v.comision_pct + "%</span><span class=\"num\">" + dinero(v.comision) + "</span></div>" +
+      '<div class="fila entre"><span class="tenue">A pagar a IZMA</span><b class="num">' + dinero(v.a_izma) + "</b></div>" +
+      (abierta ? '<div class="fila envolver linea-arriba">' +
+        '<button class="btn kraft chico" data-vista="publicar">Subir producto a esta venta</button>' +
+        '<button class="btn verde chico" id="cerrar-aqui">Cerrar y generar ticket</button></div>'
+        : '<div class="linea-arriba"><button class="btn claro chico" data-ticket-aqui>Ver ticket ' + esc(v.folio_ticket || "") + "</button></div>") +
+    "</div>" +
+    (pend.length ? '<div class="tarjeta"><h2>Por confirmar (' + pend.length + ")</h2>" +
+      '<p class="tenue" style="margin-top:0">Marca quién sí alcanzó mercancía y quién no. Lo que no alcanzó se le devuelve solo a su saldo.</p>' +
+      pend.map(i => renglonPartida(i, true)).join("") + "</div>" : "") +
+    (conf.length ? '<div class="tarjeta"><h2>Confirmadas (' + conf.length + ")</h2>" +
+      conf.map(i => renglonPartida(i, false)).join("") + "</div>" : "") +
+    (rech.length ? '<div class="tarjeta"><h2>No alcanzaron (' + rech.length + ")</h2>" +
+      rech.map(i => renglonPartida(i, false)).join("") + "</div>" : "") +
+    '<div class="tarjeta"><h2>Mercancía de esta venta</h2>' +
+      (d.productos.length ? '<div class="rejilla">' + d.productos.map(fichaInventario).join("") + "</div>"
+        : '<p class="tenue" style="margin:0">Todavía no subes nada en esta venta.</p>') + "</div>";
+
+  $$("[data-si]").forEach(b => b.onclick = async () => {
+    try {
+      const r = await rpc("resolver_partida", { p_token: E.token, p_item: b.dataset.si, p_accion: "confirmar" });
+      if (!r.ok) throw new Error(r.motivo);
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-no]").forEach(b => b.onclick = async () => {
+    const motivo = prompt("¿Qué le decimos al cliente? Se le devuelve el importe a su saldo.", "No alcanzó mercancía");
+    if (motivo === null) return;
+    try {
+      const r = await rpc("resolver_partida", { p_token: E.token, p_item: b.dataset.no, p_accion: "rechazar", p_motivo: motivo });
+      if (!r.ok) throw new Error(r.motivo);
+      aviso("Devuelto al saldo del cliente", "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  if ($("#cerrar-aqui")) $("#cerrar-aqui").onclick = async () => {
+    if (!confirm("Al cerrar se genera el ticket y lo que sobró se oculta del catálogo. ¿Cerramos?")) return;
+    try {
+      const r = await rpc("cerrar_venta", { p_token: E.token, p_venta: v.id });
+      if (!r.ok) throw new Error(r.motivo);
+      aviso("Venta cerrada · ticket " + r.folio, "bien");
+      verTicket(v.id);
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+  if ($("[data-ticket-aqui]")) $("[data-ticket-aqui]").onclick = () => verTicket(v.id);
+  enlazarEditar(d.productos);
+};
+
+async function verTicket(id) {
+  try {
+    const d = await rpc("ticket", { p_token: E.token, p_venta: id });
+    if (!d.ok) throw new Error(d.motivo);
+    const v = d.venta;
+    const cuerpo =
+      '<div class="ticket" id="ticket">' +
+        '<div style="text-align:center;margin-bottom:10px">' +
+          '<div style="font-size:26px;font-weight:700">IZMA ENVÍOS</div>' +
+          '<div style="font-family:Inter,sans-serif;font-size:12px;color:#7C899C">Ticket de venta ' + esc(v.folio_ticket || "en curso") + "</div></div>" +
+        '<h3>' + esc(v.nombre) + "</h3>" +
+        '<div class="lin"><span>Vendedor</span><span>' + esc(v.vendedor) + "</span></div>" +
+        (v.lugar ? '<div class="lin"><span>Bodega</span><span>' + esc(v.lugar) + "</span></div>" : "") +
+        '<div class="lin"><span>Abierta</span><span>' + fecha(v.creado_en) + "</span></div>" +
+        '<div class="lin"><span>Cerrada</span><span>' + (v.cerrado_en ? fecha(v.cerrado_en) : "—") + "</span></div>" +
+        '<div class="corte">' +
+          (d.lineas.length ? d.lineas.map(l =>
+            '<div class="lin"><span>' + l.cantidad + " × " + esc(l.titulo) + '<br><span style="color:#7C899C">' +
+            esc(l.cliente) + " · " + esc(l.folio) + '</span></span><span class="num">' + dinero(l.importe) + "</span></div>").join("")
+            : '<div class="lin"><span>Sin ventas asignadas</span><span>—</span></div>') +
+        "</div>" +
+        '<div class="corte">' +
+          '<div class="lin"><span>Piezas vendidas</span><span>' + d.lineas.reduce((s, l) => s + l.cantidad, 0) + "</span></div>" +
+          '<div class="lin"><span>Total vendido</span><span class="num">' + dinero(v.vendido) + "</span></div>" +
+          '<div class="lin"><span>Comisión vendedor (' + v.comision_pct + "%)</span><span class=\"num\">− " + dinero(v.comision) + "</span></div>" +
+          '<div class="final"><span>Total a pagar a IZMA</span><b class="num">' + dinero(v.a_izma) + "</b></div>" +
+        "</div></div>";
+
+    const texto = "IZMA ENVÍOS · Ticket " + (v.folio_ticket || "") + "\n" + v.nombre +
+      "\nVendedor: " + v.vendedor + "\nFecha: " + fecha(v.cerrado_en || v.creado_en) +
+      "\nVendido: " + dinero(v.vendido) + "\nComisión " + v.comision_pct + "%: " + dinero(v.comision) +
+      "\nA pagar a IZMA: " + dinero(v.a_izma);
+
+    hoja(cuerpo +
+      '<div class="fila" style="margin-top:12px">' +
+        '<button class="btn claro" style="flex:1" id="tk-print">Imprimir</button>' +
+        '<a class="btn verde" style="flex:1;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=' +
+          encodeURIComponent(texto) + '">Compartir</a></div>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>');
+
+    $("#tk-print").onclick = () => {
+      const w = window.open("", "_blank");
+      if (!w) return aviso("Tu navegador bloqueó la ventana de impresión", "mal");
+      w.document.write('<html><head><title>Ticket IZMA</title><style>body{font-family:sans-serif;padding:18px;max-width:420px}' +
+        '.lin{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}.corte{border-top:2px dashed #ccc;margin-top:12px;padding-top:12px}' +
+        '.final{display:flex;justify-content:space-between;border-top:1px solid #999;margin-top:8px;padding-top:8px;font-size:18px;font-weight:700}' +
+        "</style></head><body>" + $("#ticket").innerHTML + "</body></html>");
+      w.document.close();
+      w.focus();
+      w.print();
+    };
+  } catch (err) { aviso(err.message, "mal"); }
 }
 
 VISTAS.inventario = async () => {
