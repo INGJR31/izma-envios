@@ -379,7 +379,7 @@ async function subir(file) {
 }
 
 /* ===================== 4. backend de prueba ===================== */
-const LLAVE_DEMO = "izma_demo_v3";
+const LLAVE_DEMO = "izma_demo_v5";
 let BD = null;
 
 function guardarBD() {
@@ -451,7 +451,7 @@ async function semillaBD() {
       prod("Licuadora Ninja", "Hogar", 950, 1, "Bodega IZMA", "#4A4A6A", admin, "Vaso completo"),
       prod("Tenis niño Skechers", "Calzado", 380, 0, "Bodega La Mesa", "#5C6270", vend)
     ],
-    apartados: [], pedidos: [], items: [], abonos: [], ventas: [ventaDemo], folio_ticket: 0,
+    apartados: [], pedidos: [], items: [], abonos: [], ventas: [ventaDemo], folio_ticket: 0, bitacora: [],
     movimientos: [mov(maria, "ajuste", 1200, "Saldo a favor inicial"), mov(jose, "ajuste", 350, "Saldo a favor inicial")]
   };
 }
@@ -488,6 +488,15 @@ function liberar() {
   BD.abonos.filter(b => b.estado === "pendiente" && b.metodo === "retiro_sin_tarjeta" && b.vence_en && new Date(b.vence_en) <= t)
     .forEach(b => b.estado = "vencido");
   guardarBD();
+}
+function bitacora(u, accion, objeto, ref, detalle) {
+  if (!BD.bitacora) BD.bitacora = [];
+  BD.bitacora.push({ id: uid(), actor_usuario: u ? u.usuario : "—", accion, objeto: objeto || "",
+                     ref: ref || "", detalle: detalle || null, creado_en: ahora() });
+}
+function confirmaPin(u, hash) {
+  if (!hash) throw new Error("Necesitas confirmar con tu PIN");
+  if (hash !== u.pin_hash) throw new Error("PIN incorrecto");
 }
 function movimiento(u, tipo, monto, concepto, ref) {
   u.saldo = redondea(u.saldo + monto);
@@ -541,6 +550,7 @@ const LOCAL = {
     const token = uid() + uid();
     BD.sesiones.push({ token, usuario_id: u.id });
     u.ultimo_acceso = ahora();
+    bitacora(u, "entró al sistema", "sesion", "", null);
     guardarBD();
     return { ok: true, token, usuario: uJson(u), config: Object.assign({}, BD.config) };
   },
@@ -549,7 +559,16 @@ const LOCAL = {
     return u ? { ok: true, usuario: uJson(u), config: Object.assign({}, BD.config) } : { ok: false };
   },
   salir({ p_token }) { BD.sesiones = BD.sesiones.filter(s => s.token !== p_token); guardarBD(); return { ok: true }; },
-  cambiar_pin({ p_token, p_pin_hash_nuevo }) { exige(p_token).pin_hash = p_pin_hash_nuevo; guardarBD(); return { ok: true }; },
+  cambiar_pin({ p_token, p_pin_hash_nuevo, p_pin_hash_actual }) {
+    const u = exige(p_token);
+    if (p_pin_hash_actual) confirmaPin(u, p_pin_hash_actual);
+    if (p_pin_hash_nuevo === u.pin_hash) return { ok: false, motivo: "El PIN nuevo debe ser distinto al actual" };
+    u.pin_hash = p_pin_hash_nuevo;
+    BD.sesiones = BD.sesiones.filter(x => x.usuario_id !== u.id || x.token === p_token);
+    bitacora(u, "cambió su PIN", "usuario", u.usuario, null);
+    guardarBD();
+    return { ok: true };
+  },
   crear_solicitud(a) {
     if (!String(a.p_nombre || "").trim() || !String(a.p_telefono || "").trim())
       return { ok: false, motivo: "Falta nombre o WhatsApp" };
@@ -654,7 +673,11 @@ const LOCAL = {
       id: uid(), folio, usuario_id: u.id, total, envio: p_envio || (u.tipo_cliente === "local" ? "recoge" : "por_cobrar"),
       estado: "preparando", paqueteria: (p_paqueteria || u.paqueteria || "").trim(),
       direccion: (p_direccion || u.direccion || "").trim(), guia: "",
-      notas: p_notas || "", notas_izma: "", creado_en: ahora(), actualizado_en: ahora()
+      notas: p_notas || "", notas_izma: "",
+      bultos: 0, peso_kg: 0, largo_cm: 0, ancho_cm: 0, alto_cm: 0,
+      costo_envio: 0, flete: "por_cobrar", flete_cobrado: false,
+      destino: "", receptor: "", enviado_en: null, entrega_estimada: "",
+      creado_en: ahora(), actualizado_en: ahora()
     };
     BD.pedidos.push(ped);
     vivos.forEach(a => {
@@ -810,8 +833,14 @@ const LOCAL = {
     if (u.rol === "vendedor" && pr.vendedor_id !== u.id)
       return { ok: false, motivo: "Esa partida no es de tus productos" };
     if (i.estado !== "asignado") return { ok: false, motivo: "Esa partida ya está rechazada" };
-    if (p_accion === "confirmar") { i.confirmado = true; guardarBD(); return { ok: true }; }
+    if (p_accion === "confirmar") {
+      i.confirmado = true;
+      bitacora(u, "confirmó partida", "partida", i.titulo, null);
+      guardarBD();
+      return { ok: true };
+    }
     devolverPartida(i, p_motivo);
+    bitacora(u, "marcó que no alcanzó", "partida", i.titulo, { importe: redondea(i.precio * i.cantidad), motivo: p_motivo });
     return { ok: true };
   },
   cerrar_venta({ p_token, p_venta }) {
@@ -829,6 +858,7 @@ const LOCAL = {
     v.estado = "cerrada";
     v.cerrado_en = ahora();
     v.corte = r;
+    bitacora(u, "cerró venta", "venta", v.nombre, r);
     BD.productos.filter(p => p.venta_id === v.id && p.estado === "activo" && p.disponible > 0)
       .forEach(p => p.estado = "oculto");
     guardarBD();
@@ -947,8 +977,9 @@ const LOCAL = {
       });
     return { ok: true, items, config: Object.assign({}, BD.config) };
   },
-  admin_resolver_abono({ p_token, p_abono, p_accion, p_monto, p_nota }) {
-    exige(p_token, ["admin"]);
+  admin_resolver_abono({ p_token, p_abono, p_accion, p_monto, p_nota, p_pin_hash }) {
+    const admin = exige(p_token, ["admin"]);
+    confirmaPin(admin, p_pin_hash);
     const b = BD.abonos.find(x => x.id === p_abono);
     if (!b) return { ok: false, motivo: "Depósito no encontrado" };
     if (b.estado === "cobrado") return { ok: false, motivo: "Ese depósito ya está cobrado" };
@@ -960,29 +991,115 @@ const LOCAL = {
       movimiento(u, "abono", monto,
         (b.metodo === "retiro_sin_tarjeta" ? "Retiro sin tarjeta cobrado" : "Transferencia recibida"),
         b.referencia || b.codigo || "");
+      bitacora(admin, "cobró depósito", "cliente", u.usuario,
+        { metodo: b.metodo, declarado: b.monto, cobrado: monto, saldo: u.saldo });
     } else {
       b.estado = "rechazado"; b.resuelto_en = ahora(); b.nota_izma = p_nota || "";
+      bitacora(admin, "rechazó depósito", "cliente", u.usuario, { monto: b.monto, motivo: p_nota });
     }
     guardarBD();
     return { ok: true, saldo: u.saldo };
   },
-  admin_ajustar_saldo({ p_token, p_usuario, p_monto, p_concepto }) {
-    exige(p_token, ["admin"]);
+  admin_ajustar_saldo({ p_token, p_usuario, p_monto, p_concepto, p_pin_hash }) {
+    const a = exige(p_token, ["admin"]);
+    confirmaPin(a, p_pin_hash);
     const u = BD.usuarios.find(x => x.id === p_usuario);
     if (!u) return { ok: false, motivo: "Cliente no encontrado" };
     const monto = redondea(p_monto);
     if (!monto) return { ok: false, motivo: "Pon un monto distinto de cero" };
+    const antes = u.saldo;
     movimiento(u, "ajuste", monto, p_concepto || "Ajuste de IZMA");
+    bitacora(a, "ajustó saldo", "cliente", u.usuario, { monto, antes, despues: u.saldo, concepto: p_concepto });
     guardarBD();
     return { ok: true, saldo: u.saldo };
   },
-  admin_limite({ p_token, p_usuario, p_limite }) {
-    exige(p_token, ["admin"]);
+  admin_limite({ p_token, p_usuario, p_limite, p_pin_hash }) {
+    const a = exige(p_token, ["admin"]);
+    confirmaPin(a, p_pin_hash);
     const u = BD.usuarios.find(x => x.id === p_usuario);
     if (!u) return { ok: false, motivo: "Cliente no encontrado" };
+    const antes = u.limite_credito;
     u.limite_credito = Math.max(0, Number(p_limite || 0));
+    bitacora(a, "cambió el crédito", "cliente", u.usuario, { antes, despues: u.limite_credito });
     guardarBD();
     return { ok: true };
+  },
+  admin_envios({ p_token, p_estado }) {
+    exige(p_token, ["admin"]);
+    const items = BD.pedidos.filter(p => p.estado !== "cancelado")
+      .filter(p => !p_estado || p.estado === p_estado)
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(p => {
+        const c = BD.usuarios.find(u => u.id === p.usuario_id) || {};
+        return Object.assign({}, p, {
+          cliente: c.nombre, usuario: c.usuario, telefono: c.telefono,
+          tipo_cliente: c.tipo_cliente, ciudad: c.ciudad,
+          items: BD.items.filter(i => i.pedido_id === p.id && i.estado === "asignado")
+        });
+      });
+    const enviados = items.filter(p => p.enviado_en);
+    return { ok: true, items,
+      resumen: {
+        por_enviar: items.filter(p => p.estado === "preparando" && p.envio !== "recoge").length,
+        en_camino: items.filter(p => p.estado === "enviado").length,
+        kilos: redondea(enviados.reduce((a, p) => a + Number(p.peso_kg || 0), 0)),
+        fletes: redondea(enviados.reduce((a, p) => a + Number(p.costo_envio || 0), 0))
+      } };
+  },
+  admin_guardar_envio({ p_token, p_pedido, p_datos, p_pin_hash }) {
+    const a = exige(p_token, ["admin"]);
+    const p = BD.pedidos.find(x => x.id === p_pedido);
+    if (!p) return { ok: false, motivo: "Pedido no encontrado" };
+    const d = p_datos || {};
+    const costo = redondea(d.costo_envio || 0);
+    const cli = BD.usuarios.find(u => u.id === p.usuario_id);
+    if (d.flete === "saldo" && costo > 0 && !p.flete_cobrado) confirmaPin(a, p_pin_hash);
+
+    Object.assign(p, {
+      paqueteria: d.paqueteria !== undefined ? d.paqueteria : p.paqueteria,
+      guia: d.guia !== undefined ? d.guia : p.guia,
+      bultos: Number(d.bultos || 0), peso_kg: Number(d.peso_kg || 0),
+      largo_cm: Number(d.largo_cm || 0), ancho_cm: Number(d.ancho_cm || 0), alto_cm: Number(d.alto_cm || 0),
+      costo_envio: costo, flete: d.flete || p.flete,
+      destino: d.destino !== undefined ? d.destino : p.destino,
+      receptor: d.receptor !== undefined ? d.receptor : p.receptor,
+      entrega_estimada: d.entrega_estimada || p.entrega_estimada,
+      notas_izma: d.notas_izma !== undefined ? d.notas_izma : p.notas_izma,
+      actualizado_en: ahora()
+    });
+    if (d.estado && d.estado !== p.estado) {
+      p.estado = d.estado;
+      if (d.estado === "enviado" && !p.enviado_en) p.enviado_en = ahora();
+    }
+    if (p.guia && !p.enviado_en) p.enviado_en = ahora();
+
+    if (d.flete === "saldo" && costo > 0 && !p.flete_cobrado) {
+      movimiento(cli, "compra", -costo, "Flete " + p.folio, p.folio);
+      p.flete_cobrado = true;
+      bitacora(a, "cobró el flete al saldo", "cliente", cli.usuario, { pedido: p.folio, costo });
+    }
+    bitacora(a, "actualizó envío", "pedido", p.folio,
+      { guia: p.guia, paqueteria: p.paqueteria, kilos: p.peso_kg, costo: p.costo_envio, flete: p.flete });
+    guardarBD();
+    return { ok: true, saldo: cli ? cli.saldo : 0 };
+  },
+  admin_bitacora({ p_token, p_busqueda }) {
+    exige(p_token, ["admin"]);
+    const q = String(p_busqueda || "").toLowerCase();
+    const items = (BD.bitacora || []).filter(b => !q ||
+        (b.actor_usuario + " " + b.accion + " " + b.objeto + " " + b.ref).toLowerCase().includes(q))
+      .sort((x, y) => y.creado_en.localeCompare(x.creado_en)).slice(0, 300);
+    return { ok: true, items };
+  },
+  respaldo({ p_token }) {
+    const a = exige(p_token, ["admin"]);
+    bitacora(a, "descargó respaldo", "sistema", "", null);
+    guardarBD();
+    const copia = JSON.parse(JSON.stringify(BD));
+    copia.usuarios = copia.usuarios.map(u => { const x = Object.assign({}, u); delete x.pin_hash; return x; });
+    copia.sesiones = [];
+    copia.generado_en = ahora();
+    return { ok: true, datos: copia };
   },
   admin_usuarios({ p_token, p_rol }) {
     exige(p_token, ["admin"]);
@@ -1156,8 +1273,8 @@ const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"], ["cuenta", "Mi cuenta"]],
   vendedor: [["ventas", "Mis ventas"], ["publicar", "Subir producto"], ["inventario", "Lo que subí"], ["cuenta", "Mi cuenta"]],
   admin: [["resumen", "Resumen"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
-          ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
-          ["usuarios", "Clientes"], ["ajustes", "Ajustes"]]
+          ["envios", "Envíos"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
+          ["usuarios", "Clientes"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"]]
 };
 function pintarNav() {
   const rolTexto = E.yo.rol === "cliente"
@@ -1188,6 +1305,14 @@ document.addEventListener("click", async e => {
   if (img) verImagen(img.dataset.ver);
 });
 function ir(vista) { E.vista = vista; pintarNav(); pintar(); }
+
+/* Reautenticación: todo lo que mueve dinero pide el PIN otra vez */
+async function pedirPin(para) {
+  const pin = prompt("Confirma con tu PIN para " + para + ":", "");
+  if (pin === null) return null;
+  if (!pin.trim()) { aviso("Necesitas tu PIN para confirmar", "mal"); return null; }
+  return await hashPin(E.yo.usuario, pin);
+}
 function arrancarApp() {
   $("#acceso").style.display = "none";
   $("#app").hidden = false;
@@ -1524,6 +1649,33 @@ function formAbono(metodo, c) {
 }
 
 /* ===================== 10. cliente: compras ===================== */
+function datosEnvio(p) {
+  const vol = redondea(Number(p.largo_cm || 0) * Number(p.ancho_cm || 0) * Number(p.alto_cm || 0) *
+                       Math.max(Number(p.bultos || 1), 1) / 1000000);
+  const volumetrico = redondea(Number(p.largo_cm || 0) * Number(p.ancho_cm || 0) * Number(p.alto_cm || 0) *
+                               Math.max(Number(p.bultos || 1), 1) / 5000);
+  return { vol, volumetrico, cobrado: Math.max(Number(p.peso_kg || 0), volumetrico) };
+}
+const COMO_FLETE = { por_cobrar: "por cobrar al recibir", saldo: "cargado a tu saldo", izma: "lo paga IZMA" };
+
+function bloqueEnvio(p) {
+  if (!p.guia && !p.paqueteria && !p.peso_kg && !p.costo_envio) return "";
+  const e = datosEnvio(p);
+  const lin = (a, b) => '<div class="fila entre"><span class="tenue">' + a + '</span><span class="num">' + b + "</span></div>";
+  return '<div class="mensaje info" style="margin-top:12px">' +
+    (p.guia ? '<div style="font-weight:600;margin-bottom:6px">Guía ' + esc(p.guia) +
+       (p.paqueteria ? " · " + esc(p.paqueteria) : "") + "</div>"
+     : '<div style="font-weight:600;margin-bottom:6px">' + esc(p.paqueteria || "Envío") + " en preparación</div>") +
+    (p.bultos ? lin("Bultos", p.bultos) : "") +
+    (p.peso_kg ? lin("Peso", p.peso_kg + " kg") : "") +
+    (e.vol ? lin("Volumen", e.vol.toFixed(3) + " m³ · volumétrico " + e.volumetrico.toFixed(1) + " kg") : "") +
+    (p.costo_envio ? lin("Flete", dinero(p.costo_envio) + " · " + (COMO_FLETE[p.flete] || "")) : "") +
+    (p.destino ? lin("Destino", esc(p.destino)) : "") +
+    (p.enviado_en ? lin("Salió", fecha(p.enviado_en)) : "") +
+    (p.entrega_estimada ? lin("Llega aprox.", esc(p.entrega_estimada)) : "") +
+    "</div>";
+}
+
 const ESTADO_PEDIDO = {
   preparando: ["Preparando tu pedido", "kraft"],
   enviado: ["Enviado", "verde"],
@@ -1571,8 +1723,7 @@ async function pedidosCliente() {
         '<span class="sello rojo">devuelto ' + dinero(i.precio * i.cantidad) + "</span></div>" +
         (i.motivo ? '<div class="tenue">' + esc(i.motivo) + "</div>" : "")).join("") + "</div>" : "") +
       '<div class="total" style="margin:10px 0 0"><span>Pagado con tu saldo</span><span class="cifra">' + dinero(p.total) + "</span></div>" +
-      (p.guia ? '<div class="mensaje info" style="margin-top:12px">Guía <b>' + esc(p.guia) + "</b>" +
-        (p.paqueteria ? " · " + esc(p.paqueteria) : "") + "</div>" : "") +
+      bloqueEnvio(p) +
       (p.notas_izma ? '<div class="mensaje kraft">' + esc(p.notas_izma) + "</div>" : "") +
       "</div>";
   }).join("");
@@ -1605,10 +1756,14 @@ VISTAS.cuenta = async () => {
   };
   $("#cambiar").onclick = async () => {
     const a = $("#pin1").value.trim(), b = $("#pin2").value.trim();
-    if (a.length < 4) return aviso("El PIN necesita al menos 4 dígitos", "mal");
+    if (a.length < 6) return aviso("El PIN necesita al menos 6 dígitos", "mal");
     if (a !== b) return aviso("Los PIN no coinciden", "mal");
     try {
-      await rpc("cambiar_pin", { p_token: E.token, p_pin_hash_nuevo: await hashPin(E.yo.usuario, a) });
+      const actual = await pedirPin("confirmar el cambio");
+      if (!actual) return;
+      const r = await rpc("cambiar_pin", { p_token: E.token,
+        p_pin_hash_nuevo: await hashPin(E.yo.usuario, a), p_pin_hash_actual: actual });
+      if (r && r.ok === false) throw new Error(r.motivo);
       aviso("PIN cambiado", "bien");
       $("#pin1").value = $("#pin2").value = "";
     } catch (err) { aviso(err.message, "mal"); }
@@ -1994,7 +2149,7 @@ VISTAS.solicitudes = async () => {
   $$("[data-aprobar]").forEach(b => b.onclick = () => {
     const sugerido = b.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .split(/\s+/).slice(0, 2).join("").replace(/[^a-z0-9]/g, "").slice(0, 14);
-    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    const pin = String(Math.floor(100000 + Math.random() * 900000));
     hoja("<h2>Autorizar a " + esc(b.dataset.nombre) + "</h2>" +
       '<p class="tenue">Este usuario y PIN son los que le vas a pasar por WhatsApp.</p>' +
       '<div class="dos">' +
@@ -2007,7 +2162,7 @@ VISTAS.solicitudes = async () => {
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
     $("#a-ok").onclick = async () => {
       const usuario = $("#a-usuario").value.trim(), pinv = $("#a-pin").value.trim();
-      if (!usuario || pinv.length < 4) return aviso("Falta usuario o PIN de 4 dígitos", "mal");
+      if (!usuario || pinv.length < 6) return aviso("Falta usuario o PIN de 6 dígitos", "mal");
       try {
         const r = await rpc("admin_aprobar_solicitud", {
           p_token: E.token, p_solicitud: b.dataset.aprobar, p_usuario: usuario,
@@ -2099,9 +2254,11 @@ VISTAS.pagos = async () => {
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
     $("#cb-ok").onclick = async () => {
       try {
+        const pin = await pedirPin("abonar este depósito");
+        if (!pin) return;
         const r = await rpc("admin_resolver_abono", {
           p_token: E.token, p_abono: ab.id, p_accion: "cobrado",
-          p_monto: Number($("#cb-monto").value || 0), p_nota: $("#cb-nota").value
+          p_monto: Number($("#cb-monto").value || 0), p_nota: $("#cb-nota").value, p_pin_hash: pin
         });
         if (!r.ok) throw new Error(r.motivo);
         cerrarHoja();
@@ -2114,7 +2271,10 @@ VISTAS.pagos = async () => {
     const motivo = prompt("¿Por qué lo rechazas? (lo ve el cliente)", "");
     if (motivo === null) return;
     try {
-      await rpc("admin_resolver_abono", { p_token: E.token, p_abono: b.dataset.rechazarAbono, p_accion: "rechazado", p_nota: motivo });
+      const pin = await pedirPin("rechazar este depósito");
+      if (!pin) return;
+      await rpc("admin_resolver_abono", { p_token: E.token, p_abono: b.dataset.rechazarAbono,
+        p_accion: "rechazado", p_nota: motivo, p_pin_hash: pin });
       aviso("Depósito rechazado");
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
@@ -2268,9 +2428,12 @@ VISTAS.usuarios = async () => {
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
     $("#s-ok").onclick = async () => {
       try {
+        const pin = await pedirPin("ajustar el saldo");
+        if (!pin) return;
         const r = await rpc("admin_ajustar_saldo", {
           p_token: E.token, p_usuario: b.dataset.saldo,
-          p_monto: Number($("#s-monto").value || 0), p_concepto: $("#s-concepto").value
+          p_monto: Number($("#s-monto").value || 0), p_concepto: $("#s-concepto").value,
+          p_pin_hash: pin
         });
         if (!r.ok) throw new Error(r.motivo);
         cerrarHoja(); aviso("Saldo actualizado: " + dinero(r.saldo), "bien"); pintar();
@@ -2281,7 +2444,9 @@ VISTAS.usuarios = async () => {
     const v = prompt("Crédito autorizado (cuánto puede deber):", b.dataset.valor);
     if (v === null) return;
     try {
-      await rpc("admin_limite", { p_token: E.token, p_usuario: b.dataset.limite, p_limite: Number(v || 0) });
+      const pin = await pedirPin("cambiar el crédito");
+      if (!pin) return;
+      await rpc("admin_limite", { p_token: E.token, p_usuario: b.dataset.limite, p_limite: Number(v || 0), p_pin_hash: pin });
       aviso("Crédito actualizado", "bien");
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
@@ -2294,7 +2459,7 @@ VISTAS.usuarios = async () => {
     } catch (err) { aviso(err.message, "mal"); }
   });
   $$("[data-pin]").forEach(b => b.onclick = async () => {
-    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    const pin = String(Math.floor(100000 + Math.random() * 900000));
     try {
       await rpc("admin_editar_usuario", {
         p_token: E.token, p_id: b.dataset.pin, p_datos: { pin_hash: await hashPin(b.dataset.usuario, pin) }
@@ -2308,7 +2473,7 @@ VISTAS.usuarios = async () => {
     hoja("<h2>Crear usuario</h2>" +
       '<div class="dos">' +
         '<label class="campo"><span>Usuario</span><input id="n-usuario" autocapitalize="none"></label>' +
-        '<label class="campo"><span>PIN</span><input id="n-pin" inputmode="numeric" value="' + Math.floor(1000 + Math.random() * 9000) + '"></label></div>' +
+        '<label class="campo"><span>PIN</span><input id="n-pin" inputmode="numeric" value="' + Math.floor(100000 + Math.random() * 900000) + '"></label></div>' +
       '<label class="campo"><span>Nombre</span><input id="n-nombre"></label>' +
       '<div class="dos">' +
         '<label class="campo"><span>Rol</span><select id="n-rol">' +
@@ -2324,7 +2489,7 @@ VISTAS.usuarios = async () => {
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
     $("#n-ok").onclick = async () => {
       const usuario = $("#n-usuario").value.trim(), pin = $("#n-pin").value.trim();
-      if (!usuario || pin.length < 4) return aviso("Falta usuario o PIN", "mal");
+      if (!usuario || pin.length < 6) return aviso("El PIN debe ser de 6 dígitos", "mal");
       try {
         const r = await rpc("admin_crear_usuario", {
           p_token: E.token, p_usuario: usuario, p_pin_hash: await hashPin(usuario, pin),
@@ -2338,6 +2503,146 @@ VISTAS.usuarios = async () => {
         pintar();
       } catch (err) { aviso(err.message, "mal"); }
     };
+  };
+};
+
+VISTAS.envios = async () => {
+  const filtro = E.datos.filtroEnvio === undefined ? "preparando" : E.datos.filtroEnvio;
+  const d = await rpc("admin_envios", { p_token: E.token, p_estado: filtro });
+  const r = d.resumen;
+  const filtros = [["preparando", "Por enviar"], ["enviado", "En camino"], ["entregado", "Entregados"], ["", "Todos"]];
+  $("#vista").innerHTML =
+    '<div class="tablero">' +
+      '<div class="mosaico ' + (r.por_enviar ? "alerta" : "") + '"><div class="cifra">' + r.por_enviar + "</div><span>por enviar</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + r.en_camino + "</div><span>en camino</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + r.kilos + "</div><span>kilos enviados</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + dinero(r.fletes) + "</div><span>fletes registrados</span></div></div>" +
+    '<div class="filtros">' + filtros.map(f =>
+      '<button data-f="' + f[0] + '" aria-current="' + (filtro === f[0]) + '">' + f[1] + "</button>").join("") + "</div>" +
+    (d.items.map(p => {
+      const et = ESTADO_PEDIDO[p.estado] || [p.estado, ""];
+      const tel = String(p.telefono || "").replace(/\D/g, "");
+      const piezas = p.items.reduce((a, i) => a + i.cantidad, 0);
+      return '<div class="tarjeta">' +
+        '<div class="fila entre envolver"><h3 style="margin:0">' + esc(p.folio) + " · " + esc(p.cliente) + "</h3>" +
+          '<span class="sello ' + et[1] + '">' + et[0] + "</span></div>" +
+        '<p class="tenue" style="margin:4px 0">' +
+          (p.envio === "recoge" ? "Recoge en bodega" : "Paquetería") + " · " +
+          (p.tipo_cliente === "foraneo" ? "foráneo" : "local") +
+          (p.ciudad ? " · " + esc(p.ciudad) : "") + " · " + piezas + " piezas · " + dinero(p.total) + "</p>" +
+        (p.direccion ? '<p class="tenue" style="margin:0">' + esc(p.direccion) + "</p>" : "") +
+        bloqueEnvio(p) +
+        '<div class="fila envolver linea-arriba">' +
+          '<button class="btn chico" data-envio="' + p.id + '">' + (p.guia ? "Editar envío" : "Registrar envío") + "</button>" +
+          (tel ? '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' + tel +
+            "?text=" + encodeURIComponent("Hola " + p.cliente + ", tu pedido " + p.folio +
+              (p.guia ? " ya va en camino. Guía " + p.guia + (p.paqueteria ? " por " + p.paqueteria : "") : "") + ".") +
+            '">Avisar</a>' : "") +
+        "</div></div>";
+    }).join("") || '<div class="vacio"><h3>Nada en este filtro</h3></div>');
+
+  $$("[data-f]").forEach(b => b.onclick = () => { E.datos.filtroEnvio = b.dataset.f; pintar(); });
+  $$("[data-envio]").forEach(b => b.onclick = () => {
+    const p = d.items.find(x => x.id === b.dataset.envio);
+    hoja("<h2>Envío " + esc(p.folio) + "</h2>" +
+      '<p class="tenue" style="margin-top:0">' + esc(p.cliente) + (p.ciudad ? " · " + esc(p.ciudad) : "") + "</p>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>Paquetería</span><input id="en-paq" value="' + esc(p.paqueteria || "") + '"></label>' +
+        '<label class="campo"><span>Número de guía</span><input id="en-guia" value="' + esc(p.guia || "") + '"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Bultos</span><input id="en-bultos" inputmode="numeric" value="' + (p.bultos || "") + '"></label>' +
+        '<label class="campo"><span>Peso total (kg)</span><input id="en-peso" inputmode="decimal" value="' + (p.peso_kg || "") + '"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Largo (cm)</span><input id="en-largo" inputmode="decimal" value="' + (p.largo_cm || "") + '"></label>' +
+        '<label class="campo"><span>Ancho (cm)</span><input id="en-ancho" inputmode="decimal" value="' + (p.ancho_cm || "") + '"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Alto (cm)</span><input id="en-alto" inputmode="decimal" value="' + (p.alto_cm || "") + '"></label>' +
+        '<label class="campo"><span>Costo del flete</span><input id="en-costo" inputmode="decimal" value="' + (p.costo_envio || "") + '"></label></div>' +
+      '<div id="en-calc" class="mensaje info"></div>' +
+      '<label class="campo"><span>Quién paga el flete</span><select id="en-flete">' +
+        '<option value="por_cobrar"' + (p.flete === "por_cobrar" ? " selected" : "") + ">Por cobrar, paga al recibir</option>" +
+        '<option value="saldo"' + (p.flete === "saldo" ? " selected" : "") + ">Cargarlo a su saldo</option>" +
+        '<option value="izma"' + (p.flete === "izma" ? " selected" : "") + ">Lo absorbe IZMA</option></select></label>" +
+      (p.flete_cobrado ? '<div class="mensaje kraft">El flete de este pedido ya se le descontó del saldo.</div>' : "") +
+      '<div class="dos">' +
+        '<label class="campo"><span>Destino / sucursal</span><input id="en-destino" value="' + esc(p.destino || "") + '"></label>' +
+        '<label class="campo"><span>Llega aprox.</span><input id="en-fecha" value="' + esc(p.entrega_estimada || "") + '" placeholder="viernes 26"></label></div>' +
+      '<label class="campo"><span>Estado</span><select id="en-estado">' +
+        Object.keys(ESTADO_PEDIDO).filter(k => k !== "cancelado").map(k =>
+          '<option value="' + k + '"' + (p.estado === k ? " selected" : "") + ">" + ESTADO_PEDIDO[k][0] + "</option>").join("") +
+      "</select></label>" +
+      '<label class="campo"><span>Nota para el cliente</span><input id="en-nota" value="' + esc(p.notas_izma || "") + '"></label>' +
+      '<button class="btn lleno verde" id="en-ok">Guardar envío</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+
+    const recalcular = () => {
+      const c = datosEnvio({
+        largo_cm: $("#en-largo").value, ancho_cm: $("#en-ancho").value, alto_cm: $("#en-alto").value,
+        bultos: $("#en-bultos").value, peso_kg: $("#en-peso").value
+      });
+      $("#en-calc").innerHTML = c.vol
+        ? "Volumen <b>" + c.vol.toFixed(3) + " m³</b> · peso volumétrico <b>" + c.volumetrico.toFixed(1) +
+          " kg</b> · la paquetería suele cobrar sobre <b>" + c.cobrado.toFixed(1) + " kg</b>"
+        : "Captura medidas y peso para calcular el volumen.";
+    };
+    ["en-largo", "en-ancho", "en-alto", "en-bultos", "en-peso"].forEach(id => $("#" + id).oninput = recalcular);
+    recalcular();
+
+    $("#en-ok").onclick = async () => {
+      const datos = {
+        paqueteria: $("#en-paq").value, guia: $("#en-guia").value,
+        bultos: Number($("#en-bultos").value || 0), peso_kg: Number($("#en-peso").value || 0),
+        largo_cm: Number($("#en-largo").value || 0), ancho_cm: Number($("#en-ancho").value || 0),
+        alto_cm: Number($("#en-alto").value || 0), costo_envio: Number($("#en-costo").value || 0),
+        flete: $("#en-flete").value, destino: $("#en-destino").value,
+        entrega_estimada: $("#en-fecha").value, estado: $("#en-estado").value,
+        notas_izma: $("#en-nota").value
+      };
+      try {
+        let pin = null;
+        if (datos.flete === "saldo" && datos.costo_envio > 0 && !p.flete_cobrado) {
+          pin = await pedirPin("cargarle el flete a su saldo");
+          if (!pin) return;
+        }
+        const res = await rpc("admin_guardar_envio", { p_token: E.token, p_pedido: p.id, p_datos: datos, p_pin_hash: pin });
+        if (!res.ok) throw new Error(res.motivo);
+        cerrarHoja();
+        aviso("Envío guardado", "bien");
+        pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
+};
+
+VISTAS.bitacora = async () => {
+  const d = await rpc("admin_bitacora", { p_token: E.token, p_busqueda: E.busqueda });
+  $("#vista").innerHTML =
+    '<div class="mensaje info">Todo lo que toca dinero queda aquí y no se puede borrar: ajustes de saldo, créditos, depósitos cobrados, partidas devueltas y cierres de venta.</div>' +
+    '<div class="buscador"><input id="q" placeholder="Buscar por usuario o acción…" value="' + esc(E.busqueda) +
+      '"><button class="btn" id="bq">Buscar</button>' +
+      '<button class="btn claro" id="bk">Respaldo</button></div>' +
+    '<div class="tarjeta">' +
+      (d.items.length ? d.items.map(b =>
+        '<div class="mov"><div><div><b>' + esc(b.actor_usuario) + "</b> " + esc(b.accion) +
+          (b.ref ? " · " + esc(b.ref) : "") + "</div>" +
+          '<div class="tenue">' + fecha(b.creado_en) +
+          (b.detalle ? " · " + esc(JSON.stringify(b.detalle).replace(/[{}"]/g, "").replace(/,/g, ", ")) : "") +
+          "</div></div></div>").join("")
+        : '<p class="tenue" style="margin:0">Sin registros todavía.</p>') + "</div>";
+  $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
+  $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
+  $("#bk").onclick = async () => {
+    try {
+      const r = await rpc("respaldo", { p_token: E.token });
+      if (!r.ok) throw new Error(r.motivo);
+      const blob = new Blob([JSON.stringify(r.datos || r, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "izma-respaldo-" + new Date().toISOString().slice(0, 10) + ".json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      aviso("Respaldo descargado. Guárdalo fuera de la compu.", "bien");
+    } catch (err) { aviso(err.message, "mal"); }
   };
 };
 
