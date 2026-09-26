@@ -1645,7 +1645,7 @@ const LOCAL = {
     exige(p_token, ["admin"]);
     const u = BD.usuarios.find(x => x.id === p_id);
     if (!u) return { ok: false, motivo: "No existe" };
-    ["nombre", "telefono", "ciudad", "direccion", "paqueteria", "tipo_cliente", "estado", "notas"].forEach(k => {
+    ["nombre", "telefono", "ciudad", "direccion", "paqueteria", "tipo_cliente", "estado", "notas", "estado_mx"].forEach(k => {
       if (p_datos[k]) u[k] = p_datos[k];
     });
     if (p_datos.pin_hash) u.pin_hash = p_datos.pin_hash;
@@ -3046,6 +3046,7 @@ VISTAS.usuarios = async () => {
               '<button class="btn kraft chico" data-gasto="' + u.id + '" data-nombre="' + esc(u.nombre) + '">Cobrar gasto</button>' +
               '<button class="btn claro chico" data-limite="' + u.id + '" data-valor="' + (u.limite_credito || 0) + '">Crédito</button>' : "") +
           (u.rol === "cliente" ? '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' : "") +
+          '<button class="btn claro chico" data-editar-u="' + u.id + '">Editar</button>' +
           '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
           '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
             (u.estado === "activo" ? "Suspender" : "Reactivar") + "</button></div></div>";
@@ -3075,6 +3076,44 @@ VISTAS.usuarios = async () => {
     };
   });
   $$("[data-ficha]").forEach(b => b.onclick = () => { E.datos.ficha = b.dataset.ficha; ir("cliente"); });
+  $$("[data-editar-u]").forEach(b => b.onclick = () => {
+    const u = d.items.find(x => x.id === b.dataset.editarU);
+    hoja("<h2>Editar a " + esc(u.nombre) + "</h2>" +
+      '<p class="tenue" style="margin-top:0">Usuario <b>' + esc(u.usuario) + "</b> · " + esc(u.rol) +
+        ". El usuario no se cambia; si se equivocaron, crea otro y suspende este.</p>" +
+      '<label class="campo"><span>Nombre</span><input id="ed-nombre" value="' + esc(u.nombre || "") + '"></label>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>WhatsApp</span><input id="ed-tel" value="' + esc(u.telefono || "") + '"></label>' +
+        '<label class="campo"><span>Ciudad</span><input id="ed-ciudad" value="' + esc(u.ciudad || "") + '"></label></div>' +
+      (u.rol === "cliente"
+        ? '<div class="dos">' +
+            '<label class="campo"><span>Tipo de cliente</span><select id="ed-tipo">' +
+              '<option value="local"' + (u.tipo_cliente === "local" ? " selected" : "") + ">Local</option>" +
+              '<option value="foraneo"' + (u.tipo_cliente === "foraneo" ? " selected" : "") + ">Foráneo</option></select></label>" +
+            '<label class="campo"><span>Estado</span><select id="ed-edo">' + OPCIONES_ESTADO(u.estado_mx || "") + "</select></label></div>" +
+          '<label class="campo"><span>Paquetería</span><input id="ed-paq" value="' + esc(u.paqueteria || "") + '"></label>' +
+          '<label class="campo"><span>Dirección de envío</span><textarea id="ed-dir">' + esc(u.direccion || "") + "</textarea></label>"
+        : "") +
+      '<label class="campo"><span>Nota interna (no la ve el cliente)</span><input id="ed-notas" value="' + esc(u.notas || "") + '"></label>' +
+      '<div class="mensaje info">El saldo y el crédito se cambian con sus botones, para que quede el movimiento registrado.</div>' +
+      '<button class="btn lleno verde" id="ed-ok">Guardar cambios</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#ed-ok").onclick = async () => {
+      const datos = { nombre: $("#ed-nombre").value, telefono: $("#ed-tel").value,
+                      ciudad: $("#ed-ciudad").value, notas: $("#ed-notas").value };
+      if ($("#ed-tipo")) {
+        datos.tipo_cliente = $("#ed-tipo").value;
+        datos.estado_mx = $("#ed-edo").value;
+        datos.paqueteria = $("#ed-paq").value;
+        datos.direccion = $("#ed-dir").value;
+      }
+      try {
+        const r = await rpc("admin_editar_usuario", { p_token: E.token, p_id: u.id, p_datos: datos });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Datos actualizados", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
   $$("[data-gasto]").forEach(b => b.onclick = () => {
     hoja("<h2>Cobrar gasto extra</h2>" +
       '<p class="tenue" style="margin-top:0">' + esc(b.dataset.nombre) + " · se descuenta de su saldo y queda en su historial.</p>" +
