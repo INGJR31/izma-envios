@@ -402,7 +402,7 @@ async function subir(file) {
 }
 
 /* ===================== 4. backend de prueba ===================== */
-const LLAVE_DEMO = "izma_demo_v7";
+const LLAVE_DEMO = "izma_demo_v8";
 let BD = null;
 
 function guardarBD() {
@@ -474,7 +474,7 @@ async function semillaBD() {
       prod("Licuadora Ninja", "Hogar", 950, 1, "Bodega IZMA", "#4A4A6A", admin, "Vaso completo"),
       prod("Tenis niño Skechers", "Calzado", 380, 0, "Bodega La Mesa", "#5C6270", vend)
     ],
-    apartados: [], pedidos: [], items: [], abonos: [], ventas: [ventaDemo], folio_ticket: 0, bitacora: [], recolecciones: [],
+    apartados: [], pedidos: [], items: [], abonos: [], ventas: [ventaDemo], folio_ticket: 0, bitacora: [], recolecciones: [], cajas: [], folio_caja: 0,
     movimientos: [mov(maria, "ajuste", 1200, "Saldo a favor inicial"), mov(jose, "ajuste", 350, "Saldo a favor inicial")]
   };
 }
@@ -526,6 +526,56 @@ function movimiento(u, tipo, monto, concepto, ref) {
   BD.movimientos.push({ id: uid(), usuario_id: u.id, tipo, monto: redondea(monto), concepto,
                         ref: ref || "", saldo: u.saldo, creado_en: ahora() });
 }
+function contenidoCaja(cajaId) {
+  const arr = [];
+  BD.items.filter(i => i.caja_id === cajaId).forEach(i => {
+    const ped = BD.pedidos.find(p => p.id === i.pedido_id) || {};
+    arr.push({ clase: "item", id: i.id, titulo: i.titulo, cantidad: i.cantidad,
+               valor: redondea(i.precio * i.cantidad), origen: ped.folio || "", fecha: ped.creado_en });
+  });
+  (BD.recolecciones || []).filter(r => r.caja_id === cajaId).forEach(r => {
+    arr.push({ clase: "reco", id: r.id, titulo: r.descripcion || ("Paquete de " + r.bodega),
+               cantidad: r.piezas || 1, valor: 0, origen: r.referencia, fecha: r.creado_en });
+  });
+  return arr;
+}
+
+/* Lo que un cliente tiene físicamente en la bodega de IZMA */
+function bodegaDe(usuarioId) {
+  const dias = f => Math.max(0, Math.floor((Date.now() - new Date(f)) / 86400000));
+  const enBodega = [];
+  BD.items.filter(i => i.estado === "asignado" && !i.caja_id && (i.alm || "en_bodega") === "en_bodega")
+    .forEach(i => {
+      const ped = BD.pedidos.find(p => p.id === i.pedido_id);
+      if (!ped || ped.usuario_id !== usuarioId || ped.estado === "cancelado") return;
+      enBodega.push({ clase: "item", id: i.id, titulo: i.titulo, cantidad: i.cantidad,
+                      valor: redondea(i.precio * i.cantidad), origen: ped.folio,
+                      fecha: ped.creado_en, dias: dias(ped.creado_en) });
+    });
+  (BD.recolecciones || []).filter(r => r.usuario_id === usuarioId && !r.caja_id &&
+      (r.estado === "recolectada" || r.estado === "en_bodega"))
+    .forEach(r => enBodega.push({ clase: "reco", id: r.id,
+      titulo: r.descripcion || ("Paquete de " + r.bodega), cantidad: r.piezas || 1, valor: 0,
+      origen: r.referencia, fecha: r.creado_en, dias: dias(r.creado_en) }));
+
+  const caja = (BD.cajas || []).find(c => c.usuario_id === usuarioId &&
+    (c.estado === "abierta" || c.estado === "solicitada" || c.estado === "cerrada"));
+  const contenido = caja ? contenidoCaja(caja.id) : [];
+  const cajasEnviadas = (BD.cajas || []).filter(c => c.usuario_id === usuarioId && c.enviado_en)
+    .sort((a, b) => b.enviado_en.localeCompare(a.enviado_en)).slice(0, 10);
+
+  return { ok: true,
+    en_bodega: enBodega.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))),
+    caja: caja
+      ? Object.assign({}, caja, { contenido, piezas: contenido.reduce((a, x) => a + x.cantidad, 0),
+                                  valor: redondea(contenido.reduce((a, x) => a + x.valor, 0)) })
+      : { id: "", folio: "", estado: "", contenido: [], piezas: 0, valor: 0 },
+    enviadas: cajasEnviadas,
+    total: { piezas: enBodega.reduce((a, x) => a + x.cantidad, 0),
+             valor: redondea(enBodega.reduce((a, x) => a + x.valor, 0)),
+             dias: enBodega.length ? Math.max(...enBodega.map(x => x.dias)) : 0 } };
+}
+
 const apartadasDe = id => BD.apartados.filter(a => a.estado === "activo" && a.producto_id === id).reduce((s, a) => s + a.cantidad, 0);
 
 /* Corte de una jornada de venta: vendido, comisión del vendedor y lo que va a IZMA */
@@ -1137,6 +1187,135 @@ const LOCAL = {
     guardarBD();
     return { ok: true, saldo: u.saldo };
   },
+  /* ---- bodega del cliente: lo almacenado y su caja ---- */
+  mi_bodega({ p_token }) {
+    const u = exige(p_token);
+    return bodegaDe(u.id);
+  },
+  caja_agregar({ p_token, p_tipo, p_id }) {
+    const u = exige(p_token);
+    let caja = (BD.cajas || []).find(c => c.usuario_id === u.id && c.estado === "abierta");
+    if (!caja) {
+      if (!BD.cajas) BD.cajas = [];
+      BD.folio_caja = (BD.folio_caja || 0) + 1;
+      const f = new Date();
+      caja = { id: uid(), usuario_id: u.id,
+        folio: "CJ" + String(f.getFullYear()).slice(2) + String(f.getMonth() + 1).padStart(2, "0") +
+               String(f.getDate()).padStart(2, "0") + String(BD.folio_caja).padStart(3, "0"),
+        estado: "abierta", paqueteria: "", guia: "", bultos: 1, peso_kg: 0,
+        largo_cm: 0, ancho_cm: 0, alto_cm: 0, costo_envio: 0, flete: "por_cobrar", flete_cobrado: false,
+        destino: "", entrega_estimada: "", notas: "", notas_izma: "",
+        enviado_en: null, creado_en: ahora() };
+      BD.cajas.push(caja);
+    }
+    if (p_tipo === "reco") {
+      const r = (BD.recolecciones || []).find(x => x.id === p_id && x.usuario_id === u.id);
+      if (!r) return { ok: false, motivo: "No encontrado" };
+      r.caja_id = caja.id;
+    } else {
+      const i = BD.items.find(x => x.id === p_id);
+      if (!i) return { ok: false, motivo: "No encontrado" };
+      const ped = BD.pedidos.find(p => p.id === i.pedido_id);
+      if (!ped || ped.usuario_id !== u.id) return { ok: false, motivo: "Eso no es tuyo" };
+      i.alm = "en_caja"; i.caja_id = caja.id;
+    }
+    guardarBD();
+    return { ok: true, caja: caja.folio };
+  },
+  caja_quitar({ p_token, p_tipo, p_id }) {
+    const u = exige(p_token);
+    if (p_tipo === "reco") {
+      const r = (BD.recolecciones || []).find(x => x.id === p_id && x.usuario_id === u.id);
+      if (r) r.caja_id = null;
+    } else {
+      const i = BD.items.find(x => x.id === p_id);
+      const ped = i && BD.pedidos.find(p => p.id === i.pedido_id);
+      if (ped && ped.usuario_id === u.id) { i.alm = "en_bodega"; i.caja_id = null; }
+    }
+    guardarBD();
+    return { ok: true };
+  },
+  solicitar_envio({ p_token, p_notas }) {
+    const u = exige(p_token);
+    const caja = (BD.cajas || []).find(c => c.usuario_id === u.id && c.estado === "abierta");
+    if (!caja) return { ok: false, motivo: "No tienes una caja armada" };
+    const b = bodegaDe(u.id);
+    if (!b.caja.contenido.length) return { ok: false, motivo: "Tu caja está vacía" };
+    caja.estado = "solicitada";
+    caja.notas = p_notas || "";
+    bitacora(u, "pidió que le manden su caja", "caja", caja.folio, { piezas: b.caja.piezas });
+    guardarBD();
+    return { ok: true, folio: caja.folio };
+  },
+  admin_bodega({ p_token, p_usuario }) {
+    exige(p_token, ["admin", "vendedor"]);
+    const clientes = BD.usuarios.filter(u => u.rol === "cliente" && u.estado === "activo")
+      .map(u => {
+        const b = bodegaDe(u.id);
+        return { id: u.id, nombre: u.nombre, usuario: u.usuario, telefono: u.telefono,
+                 ciudad: u.ciudad, tipo_cliente: u.tipo_cliente, saldo: u.saldo,
+                 piezas: b.total.piezas, valor: b.total.valor, dias: b.total.dias,
+                 caja: b.caja.folio || "", caja_estado: b.caja.estado || "" };
+      })
+      .filter(c => c.piezas > 0 || c.caja)
+      .sort((a, b) => b.piezas - a.piezas);
+    const detalle = p_usuario ? bodegaDe(p_usuario) : null;
+    return { ok: true, clientes, detalle,
+      total: { piezas: clientes.reduce((a, c) => a + c.piezas, 0),
+               valor: redondea(clientes.reduce((a, c) => a + c.valor, 0)),
+               cajas: (BD.cajas || []).filter(c => c.estado === "solicitada").length } };
+  },
+  admin_cajas({ p_token, p_estado }) {
+    exige(p_token, ["admin", "vendedor"]);
+    const items = (BD.cajas || []).filter(c => !p_estado || c.estado === p_estado)
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(c => {
+        const u = BD.usuarios.find(x => x.id === c.usuario_id) || {};
+        const b = bodegaDe(c.usuario_id);
+        return Object.assign({}, c, { cliente: u.nombre, usuario: u.usuario, telefono: u.telefono,
+          direccion: u.direccion, ciudad: u.ciudad,
+          contenido: b.caja.id === c.id ? b.caja.contenido : contenidoCaja(c.id),
+          piezas: (b.caja.id === c.id ? b.caja.contenido : contenidoCaja(c.id)).reduce((a, x) => a + x.cantidad, 0) });
+      });
+    return { ok: true, items };
+  },
+  admin_guardar_caja({ p_token, p_caja, p_datos, p_pin_hash }) {
+    const a = exige(p_token, ["admin", "vendedor"]);
+    const c = (BD.cajas || []).find(x => x.id === p_caja);
+    if (!c) return { ok: false, motivo: "Caja no encontrada" };
+    const d = p_datos || {};
+    const costo = redondea(d.costo_envio || 0);
+    const cli = BD.usuarios.find(u => u.id === c.usuario_id);
+    const cobra = d.flete === "saldo" && costo > 0 && !c.flete_cobrado;
+    if (cobra) {
+      if (a.rol !== "admin") return { ok: false, motivo: "Solo administración cobra al saldo" };
+      confirmaPin(a, p_pin_hash);
+    }
+    Object.assign(c, {
+      paqueteria: d.paqueteria !== undefined ? d.paqueteria : c.paqueteria,
+      guia: d.guia !== undefined ? d.guia : c.guia,
+      bultos: Number(d.bultos || c.bultos || 1), peso_kg: Number(d.peso_kg || 0),
+      largo_cm: Number(d.largo_cm || 0), ancho_cm: Number(d.ancho_cm || 0), alto_cm: Number(d.alto_cm || 0),
+      costo_envio: costo, flete: d.flete || c.flete,
+      destino: d.destino !== undefined ? d.destino : c.destino,
+      entrega_estimada: d.entrega_estimada || c.entrega_estimada,
+      notas_izma: d.notas_izma !== undefined ? d.notas_izma : c.notas_izma,
+      estado: d.estado || c.estado
+    });
+    if (c.estado === "enviada" && !c.enviado_en) {
+      c.enviado_en = ahora();
+      BD.items.filter(i => i.caja_id === c.id).forEach(i => i.alm = "enviado");
+      (BD.recolecciones || []).filter(r => r.caja_id === c.id).forEach(r => r.estado = "enviada");
+    }
+    if (cobra) {
+      movimiento(cli, "cargo", -costo, "Flete caja " + c.folio, c.folio);
+      c.flete_cobrado = true;
+      bitacora(a, "cobró el flete de la caja", "cliente", cli.usuario, { caja: c.folio, costo });
+    }
+    bitacora(a, "actualizó caja", "caja", c.folio, { estado: c.estado, guia: c.guia });
+    guardarBD();
+    return { ok: true };
+  },
   admin_mapa({ p_token }) {
     exige(p_token, ["admin"]);
     const por = {};
@@ -1410,11 +1589,11 @@ $("#form-solicitar").addEventListener("submit", async e => {
 /* ===================== 7. navegación ===================== */
 const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"],
-            ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
+            ["almacen", "Mi bodega"], ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
   vendedor: [["ventas", "Mis ventas"], ["publicar", "Subir producto"], ["inventario", "Lo que subí"],
              ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
   admin: [["resumen", "Resumen"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
-          ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
+          ["almacen", "Bodega"], ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
           ["usuarios", "Clientes"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"]]
 };
 function pintarNav() {
@@ -3000,6 +3179,225 @@ async function recoleccionCliente() {
       pintar();
     } catch (err) { aviso(err.message, "mal"); b.disabled = false; b.textContent = "Pedir recolección"; }
   };
+}
+
+const ESTADO_CAJA = {
+  abierta:    ["Armando", "kraft"],
+  solicitada: ["Pidió envío", "rojo"],
+  cerrada:    ["Empacada", "kraft"],
+  enviada:    ["Enviada", "verde"],
+  entregada:  ["Entregada", "verde"]
+};
+
+VISTAS.almacen = async () => {
+  if (E.yo.rol === "cliente") return miBodega();
+  return bodegaAdmin();
+};
+
+async function miBodega() {
+  const d = await rpc("mi_bodega", { p_token: E.token });
+  const c = d.caja;
+  const renglon = (x, enCaja) =>
+    '<div class="renglon"><div class="crece">' +
+      '<div style="font-weight:600">' + x.cantidad + " × " + esc(x.titulo) + "</div>" +
+      '<div class="tenue">' + (x.clase === "reco" ? "Recolección · " : "Compra ") + esc(x.origen || "") +
+        (x.dias !== undefined ? " · " + x.dias + (x.dias === 1 ? " día" : " días") + " en bodega" : "") + "</div>" +
+    "</div>" +
+    '<div style="text-align:right">' +
+      (x.valor ? '<div class="num" style="font-weight:600">' + dinero(x.valor) + "</div>" : "") +
+      (c.estado === "abierta" || !enCaja
+        ? '<button class="btn ' + (enCaja ? "claro" : "kraft") + ' chico" data-' + (enCaja ? "quitar" : "meter") +
+          '="' + x.id + '" data-clase="' + x.clase + '">' + (enCaja ? "Sacar" : "A mi caja") + "</button>"
+        : "") +
+    "</div></div>";
+
+  $("#vista").innerHTML =
+    '<div class="tablero">' +
+      '<div class="mosaico"><div class="cifra">' + d.total.piezas + "</div><span>piezas en bodega</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + dinero(d.total.valor) + "</div><span>valor guardado</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + d.total.dias + "</div><span>días de la más vieja</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + c.piezas + "</div><span>piezas en tu caja</span></div></div>" +
+
+    '<div class="tarjeta"><h2>En bodega, sin acomodar</h2>' +
+      '<p class="tenue" style="margin-top:0">Todo lo que has comprado y lo que recogimos para ti. Mételo a tu caja cuando quieras que te lo mandemos.</p>' +
+      (d.en_bodega.length ? d.en_bodega.map(x => renglon(x, false)).join("")
+        : '<p class="tenue" style="margin:0">No tienes nada esperando en bodega.</p>') + "</div>" +
+
+    '<div class="tarjeta"><div class="fila entre envolver">' +
+        "<h2 style=\"margin:0\">Mi caja" + (c.folio ? " " + esc(c.folio) : "") + "</h2>" +
+        (c.estado ? '<span class="sello ' + (ESTADO_CAJA[c.estado] || ["", ""])[1] + '">' +
+          (ESTADO_CAJA[c.estado] || [c.estado])[0] + "</span>" : "") + "</div>" +
+      (c.contenido.length
+        ? c.contenido.map(x => renglon(x, true)).join("") +
+          '<div class="total"><span>' + c.piezas + " piezas</span><span class=\"cifra\">" + dinero(c.valor) + "</span></div>" +
+          (c.estado === "abierta"
+            ? '<label class="campo"><span>Instrucciones para IZMA (opcional)</span><input id="cj-nota" placeholder="Ej. mándenla por Castores"></label>' +
+              '<button class="btn lleno verde" id="cj-ok">Pedir que me la manden</button>'
+            : '<div class="mensaje kraft">Ya pediste el envío. IZMA la pesa, te dice el costo y te pasa la guía.</div>') +
+          (c.guia ? '<div class="mensaje info">Guía <b>' + esc(c.guia) + "</b>" +
+            (c.paqueteria ? " · " + esc(c.paqueteria) : "") + "</div>" : "") +
+          (c.costo_envio ? '<div class="mensaje info">Flete ' + dinero(c.costo_envio) + " · " +
+            (COMO_FLETE[c.flete] || "") + "</div>" : "")
+        : '<p class="tenue" style="margin:0">Tu caja está vacía. Agrega de lo que tienes en bodega.</p>') +
+    "</div>" +
+
+    (d.enviadas.length ? '<div class="tarjeta"><h2>Cajas que ya te mandamos</h2>' +
+      d.enviadas.map(x => '<div class="mov"><div><div><b>' + esc(x.folio) + "</b> · " +
+        (x.guia ? "guía " + esc(x.guia) : "sin guía") + "</div>" +
+        '<div class="tenue">' + fecha(x.enviado_en) + (x.peso_kg ? " · " + x.peso_kg + " kg" : "") + "</div></div>" +
+        '<div class="monto">' + (x.costo_envio ? dinero(x.costo_envio) : "") + "</div></div>").join("") + "</div>" : "");
+
+  $$("[data-meter]").forEach(b => b.onclick = async () => {
+    try {
+      const r = await rpc("caja_agregar", { p_token: E.token, p_tipo: b.dataset.clase, p_id: b.dataset.meter });
+      if (!r.ok) throw new Error(r.motivo);
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-quitar]").forEach(b => b.onclick = async () => {
+    try {
+      await rpc("caja_quitar", { p_token: E.token, p_tipo: b.dataset.clase, p_id: b.dataset.quitar });
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  if ($("#cj-ok")) $("#cj-ok").onclick = async () => {
+    try {
+      const r = await rpc("solicitar_envio", { p_token: E.token, p_notas: $("#cj-nota").value });
+      if (!r.ok) throw new Error(r.motivo);
+      aviso("Listo, IZMA ya la tiene en su lista", "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+}
+
+async function bodegaAdmin() {
+  const verCliente = E.datos.bodegaCliente || "";
+  const d = await rpc("admin_bodega", { p_token: E.token, p_usuario: verCliente });
+  const cajas = await rpc("admin_cajas", { p_token: E.token, p_estado: E.datos.filtroCaja || "" });
+  const filtros = [["", "Todas"], ["abierta", "Armando"], ["solicitada", "Piden envío"],
+                   ["cerrada", "Empacadas"], ["enviada", "Enviadas"]];
+
+  $("#vista").innerHTML =
+    '<div class="tablero">' +
+      '<div class="mosaico"><div class="cifra">' + d.total.piezas + "</div><span>piezas guardadas</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + dinero(d.total.valor) + "</div><span>valor en bodega</span></div>" +
+      '<div class="mosaico ' + (d.total.cajas ? "alerta" : "") + '"><div class="cifra">' + d.total.cajas +
+        "</div><span>cajas que piden envío</span></div></div>" +
+
+    (d.detalle ? '<div class="tarjeta">' +
+      '<button class="btn claro chico" data-volver style="margin-bottom:10px">← Todos los clientes</button>' +
+      "<h2>Lo que tiene guardado</h2>" +
+      (d.detalle.en_bodega.length ? d.detalle.en_bodega.map(x =>
+        '<div class="renglon"><div class="crece"><div style="font-weight:600">' + x.cantidad + " × " + esc(x.titulo) + "</div>" +
+        '<div class="tenue">' + (x.clase === "reco" ? "Recolección · " : "Compra ") + esc(x.origen || "") +
+        " · " + x.dias + " días</div></div>" +
+        '<div class="num">' + (x.valor ? dinero(x.valor) : "") + "</div></div>").join("")
+        : '<p class="tenue" style="margin:0">Sin piezas sueltas.</p>') +
+      (d.detalle.caja.contenido.length ? '<div class="linea-arriba"><b>En su caja ' + esc(d.detalle.caja.folio) + "</b>" +
+        d.detalle.caja.contenido.map(x => '<div class="fila entre" style="padding:3px 0"><span>' +
+          x.cantidad + " × " + esc(x.titulo) + '</span><span class="num">' + (x.valor ? dinero(x.valor) : "") +
+          "</span></div>").join("") + "</div>" : "") +
+      "</div>" : "") +
+
+    '<div class="tarjeta"><h2>Clientes con mercancía en bodega</h2>' +
+      (d.clientes.length ? d.clientes.map(c =>
+        '<div class="renglon"><div class="crece">' +
+          '<div style="font-weight:600">' + esc(c.nombre) + "</div>" +
+          '<div class="tenue">' + esc(c.usuario) + " · " + (c.tipo_cliente === "foraneo" ? "foráneo" : "local") +
+            (c.ciudad ? " · " + esc(c.ciudad) : "") + "</div>" +
+          '<div class="tenue">' + c.piezas + " piezas · " + dinero(c.valor) +
+            (c.dias ? " · la más vieja lleva " + c.dias + " días" : "") + "</div>" +
+          (c.caja ? '<span class="sello ' + (ESTADO_CAJA[c.caja_estado] || ["", ""])[1] + '">Caja ' + esc(c.caja) +
+            " · " + (ESTADO_CAJA[c.caja_estado] || [c.caja_estado])[0] + "</span>" : "") +
+        "</div>" +
+        '<button class="btn claro chico" data-vercli="' + c.id + '">Ver</button></div>').join("")
+        : '<p class="tenue" style="margin:0">Nadie tiene mercancía guardada.</p>') + "</div>" +
+
+    '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">Cajas</h2>' +
+        '<span class="gopack">GO PACK</span></div>' +
+      '<div class="filtros" style="margin-top:8px">' + filtros.map(f =>
+        '<button data-fc="' + f[0] + '" aria-current="' + ((E.datos.filtroCaja || "") === f[0]) + '">' + f[1] + "</button>").join("") + "</div>" +
+      (cajas.items.length ? cajas.items.map(c => {
+        const et = ESTADO_CAJA[c.estado] || [c.estado, ""];
+        return '<div class="renglon"><div class="crece">' +
+          '<div class="fila entre envolver"><b>' + esc(c.folio) + " · " + esc(c.cliente || "") + "</b>" +
+            '<span class="sello ' + et[1] + '">' + et[0] + "</span></div>" +
+          '<div class="tenue">' + c.piezas + " piezas" + (c.peso_kg ? " · " + c.peso_kg + " kg" : "") +
+            (c.guia ? " · guía " + esc(c.guia) : "") + (c.ciudad ? " · " + esc(c.ciudad) : "") + "</div>" +
+          (c.notas ? '<div class="tenue">Cliente: ' + esc(c.notas) + "</div>" : "") +
+          '<button class="btn chico" style="margin-top:6px" data-caja="' + c.id + '">Gestionar</button>' +
+        "</div></div>";
+      }).join("") : '<p class="tenue" style="margin:0">Nada en este filtro.</p>') + "</div>";
+
+  $$("[data-vercli]").forEach(b => b.onclick = () => { E.datos.bodegaCliente = b.dataset.vercli; pintar(); });
+  if ($("[data-volver]")) $("[data-volver]").onclick = () => { E.datos.bodegaCliente = ""; pintar(); };
+  $$("[data-fc]").forEach(b => b.onclick = () => { E.datos.filtroCaja = b.dataset.fc; pintar(); });
+  $$("[data-caja]").forEach(b => b.onclick = () => {
+    const c = cajas.items.find(x => x.id === b.dataset.caja);
+    hoja("<h2>Caja " + esc(c.folio) + "</h2>" +
+      '<p class="tenue" style="margin-top:0">' + esc(c.cliente || "") + " · " + c.piezas + " piezas" +
+        (c.direccion ? "<br>" + esc(c.direccion) : "") + "</p>" +
+      '<div class="mensaje info">' + c.contenido.map(x => x.cantidad + " × " + esc(x.titulo)).join("<br>") + "</div>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>Paquetería</span><input id="cx-paq" value="' + esc(c.paqueteria || "") + '"></label>' +
+        '<label class="campo"><span>Guía</span><input id="cx-guia" value="' + esc(c.guia || "") + '"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Bultos</span><input id="cx-bultos" inputmode="numeric" value="' + (c.bultos || 1) + '"></label>' +
+        '<label class="campo"><span>Peso (kg)</span><input id="cx-peso" inputmode="decimal" value="' + (c.peso_kg || "") + '"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Largo (cm)</span><input id="cx-largo" inputmode="decimal" value="' + (c.largo_cm || "") + '"></label>' +
+        '<label class="campo"><span>Ancho (cm)</span><input id="cx-ancho" inputmode="decimal" value="' + (c.ancho_cm || "") + '"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Alto (cm)</span><input id="cx-alto" inputmode="decimal" value="' + (c.alto_cm || "") + '"></label>' +
+        '<label class="campo"><span>Costo del flete</span><input id="cx-costo" inputmode="decimal" value="' + (c.costo_envio || "") + '"></label></div>' +
+      '<div id="cx-calc" class="mensaje info"></div>' +
+      '<label class="campo"><span>Quién paga el flete</span><select id="cx-flete">' +
+        '<option value="por_cobrar"' + (c.flete === "por_cobrar" ? " selected" : "") + ">Por cobrar al recibir</option>" +
+        '<option value="saldo"' + (c.flete === "saldo" ? " selected" : "") + ">Cargarlo a su saldo</option>" +
+        '<option value="izma"' + (c.flete === "izma" ? " selected" : "") + ">Lo absorbe IZMA</option></select></label>" +
+      (c.flete_cobrado ? '<div class="mensaje kraft">El flete de esta caja ya se le descontó.</div>' : "") +
+      '<div class="dos">' +
+        '<label class="campo"><span>Estado</span><select id="cx-estado">' +
+          Object.keys(ESTADO_CAJA).map(k => '<option value="' + k + '"' + (c.estado === k ? " selected" : "") +
+            ">" + ESTADO_CAJA[k][0] + "</option>").join("") + "</select></label>" +
+        '<label class="campo"><span>Llega aprox.</span><input id="cx-fecha" value="' + esc(c.entrega_estimada || "") + '"></label></div>' +
+      '<label class="campo"><span>Nota para el cliente</span><input id="cx-nota" value="' + esc(c.notas_izma || "") + '"></label>' +
+      '<div class="mensaje kraft">Al marcarla como enviada, todo su contenido sale de la bodega.</div>' +
+      '<button class="btn lleno verde" id="cx-ok">Guardar</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+
+    const recalcular = () => {
+      const e = datosEnvio({ largo_cm: $("#cx-largo").value, ancho_cm: $("#cx-ancho").value,
+        alto_cm: $("#cx-alto").value, bultos: $("#cx-bultos").value, peso_kg: $("#cx-peso").value });
+      $("#cx-calc").innerHTML = e.vol
+        ? "Volumen <b>" + e.vol.toFixed(3) + " m³</b> · volumétrico <b>" + e.volumetrico.toFixed(1) +
+          " kg</b> · cobran sobre <b>" + e.cobrado.toFixed(1) + " kg</b>"
+        : "Captura medidas y peso para calcular el volumen.";
+    };
+    ["cx-largo", "cx-ancho", "cx-alto", "cx-bultos", "cx-peso"].forEach(id => $("#" + id).oninput = recalcular);
+    recalcular();
+
+    $("#cx-ok").onclick = async () => {
+      const datos = {
+        paqueteria: $("#cx-paq").value, guia: $("#cx-guia").value,
+        bultos: Number($("#cx-bultos").value || 1), peso_kg: Number($("#cx-peso").value || 0),
+        largo_cm: Number($("#cx-largo").value || 0), ancho_cm: Number($("#cx-ancho").value || 0),
+        alto_cm: Number($("#cx-alto").value || 0), costo_envio: Number($("#cx-costo").value || 0),
+        flete: $("#cx-flete").value, estado: $("#cx-estado").value,
+        entrega_estimada: $("#cx-fecha").value, notas_izma: $("#cx-nota").value
+      };
+      try {
+        let pin = null;
+        if (datos.flete === "saldo" && datos.costo_envio > 0 && !c.flete_cobrado) {
+          pin = await pedirPin("cobrarle el flete de la caja");
+          if (!pin) return;
+        }
+        const r = await rpc("admin_guardar_caja", { p_token: E.token, p_caja: c.id, p_datos: datos, p_pin_hash: pin });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Caja actualizada", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
 }
 
 VISTAS.bitacora = async () => {
