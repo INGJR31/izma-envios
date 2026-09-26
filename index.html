@@ -52,6 +52,21 @@ button{cursor:pointer}
 .nav .globo{background:var(--sello);color:#fff;border-radius:999px;padding:1px 6px;margin-left:6px;font-size:11px;font-weight:600;font-style:normal}
 main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
 .cinta-demo{background:var(--kraft);color:#0B2A18;font-size:12px;font-weight:600;text-align:center;padding:5px 12px}
+.reloj-tope{font-variant-numeric:tabular-nums;color:#C9D0D2;font-size:12px;line-height:1.3;margin-top:2px}
+.reloj-tope b{color:#fff;font-weight:600}
+.saludo{background:linear-gradient(135deg,var(--tinta) 0%,#1E2A22 60%,var(--verde) 180%);
+  color:#fff;border-radius:var(--r);padding:16px 18px;margin-bottom:12px;box-shadow:var(--sombra)}
+.saludo h2{margin:0;font-size:24px;color:#fff}
+.saludo .hoy{font-size:13px;color:#9AA3A7;text-transform:capitalize}
+.saludo .frase{margin-top:8px;font-size:14px;color:#E4E7E8}
+.saludo .frase b{color:var(--kraft);font-variant-numeric:tabular-nums}
+.rapidos{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px}
+.rapidos button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:var(--r);padding:12px 13px;
+  box-shadow:var(--sombra);color:var(--tinta);font-weight:600}
+.rapidos button b{font-size:15px}
+.rapidos button span{font-size:12px;color:var(--tinta-3);font-weight:400}
+.rapidos button:hover{border-color:var(--kraft)}
 
 .tarjeta{background:var(--tarjeta);border:1px solid var(--linea);border-radius:var(--r);padding:14px;box-shadow:var(--sombra)}
 .tarjeta+.tarjeta{margin-top:12px}
@@ -211,6 +226,9 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <div class="tope-fila">
       <div class="marca">IZMA<small>ENVÍOS</small></div>
       <div class="quien" id="quien"></div>
+    </div>
+    <div class="tope-fila" style="padding-top:0">
+      <div class="reloj-tope" id="reloj"></div>
     </div>
     <nav class="nav" id="nav"></nav>
   </header>
@@ -1712,6 +1730,18 @@ const MENUS = {
           ["almacen", "Bodega"], ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
           ["usuarios", "Clientes"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"]]
 };
+function saludo(frase) {
+  const d = new Date();
+  return '<div class="saludo">' +
+    '<div class="hoy">' + fechaLarga(d) + "</div>" +
+    "<h2>" + saludoHora(d) + ", " + esc(E.yo.nombre.split(" ")[0]) + "</h2>" +
+    (frase ? '<div class="frase">' + frase + "</div>" : "") + "</div>";
+}
+function rapidos(lista) {
+  return '<div class="rapidos">' + lista.map(x =>
+    '<button data-vista="' + x[0] + '"><b>' + x[1] + "</b><span>" + x[2] + "</span></button>").join("") + "</div>";
+}
+
 function pintarNav() {
   const rolTexto = E.yo.rol === "cliente"
     ? (E.yo.tipo_cliente === "foraneo" ? "cliente foráneo" : "cliente local")
@@ -1781,7 +1811,19 @@ VISTAS.bodega = async () => {
   }
   pintarNav();
   const cats = ["", ...d.categorias.filter(Boolean)];
+  const nuevosHoy = d.items.filter(p => new Date(p.creado_en).toDateString() === new Date().toDateString()).length;
+  const frase = E.yo.rol === "cliente"
+    ? (E.yo.saldo < 0
+        ? "Traes <b>" + dinero(-E.yo.saldo) + "</b> de deuda. Abona para seguir comprando."
+        : "Tienes <b>" + dinero(E.yo.saldo) + "</b> listos para gastar") +
+      (nuevosHoy ? " · <b>" + nuevosHoy + "</b> " + (nuevosHoy === 1 ? "pieza nueva" : "piezas nuevas") + " hoy" : "")
+    : "";
   $("#vista").innerHTML =
+    (E.yo.rol === "cliente" ? saludo(frase) +
+      rapidos([["carrito", "Mi carrito", E.pendientes ? E.pendientes + " apartadas" : "vacío"],
+               ["saldo", "Abonar", "transferencia o retiro"],
+               ["almacen", "Mi bodega", "lo que tienes guardado"],
+               ["recolectar", "Recolección", "recogemos tu paquete"]]) : "") +
     (E.config.aviso ? '<div class="mensaje kraft">' + esc(E.config.aviso) + "</div>" : "") +
     '<div class="buscador"><input id="q" placeholder="Buscar en la bodega…" value="' + esc(E.busqueda) +
       '"><button class="btn" id="bq">Buscar</button></div>' +
@@ -2284,7 +2326,20 @@ VISTAS.ventas = async () => {
   const d = await rpc("ventas", { p_token: E.token });
   const mias = d.items.filter(v => E.yo.rol === "admin" || v.vendedor_id === E.yo.id);
   const tengoAbierta = mias.some(v => v.estado === "abierta" && v.vendedor_id === E.yo.id);
+  const hoy = new Date().toDateString();
+  const abiertas = d.items.filter(v => v.estado === "abierta");
+  const delDia = d.items.filter(v => new Date(v.creado_en).toDateString() === hoy);
+  const vendidoHoy = redondea(delDia.reduce((a, v) => a + Number(v.vendido || 0), 0));
+  const comisionHoy = redondea(delDia.reduce((a, v) => a + Number(v.comision || 0), 0));
+  const porConfirmar = abiertas.reduce((a, v) => a + Number(v.por_confirmar || 0), 0);
+  const fraseV = abiertas.length
+    ? "Llevas <b>" + dinero(vendidoHoy) + "</b> vendidos hoy · tu comisión va en <b>" + dinero(comisionHoy) + "</b>" +
+      (porConfirmar ? " · <b>" + porConfirmar + "</b> por confirmar" : "")
+    : "No tienes ninguna venta abierta. Abre una cuando entres a la bodega.";
   $("#vista").innerHTML =
+    (E.yo.rol === "vendedor" ? saludo(fraseV) +
+      rapidos([["publicar", "Subir producto", "foto, precio y piezas"],
+               ["inventario", "Lo que subí", "tu inventario"]]) : "") +
     '<div class="fila entre envolver" style="margin-bottom:12px">' +
       "<h2 style=\"margin:0\">Jornadas de venta</h2>" +
       (tengoAbierta ? '<span class="sello kraft">Tienes una venta abierta</span>'
@@ -2542,7 +2597,16 @@ VISTAS.resumen = async () => {
   const r = await rpc("admin_resumen", { p_token: E.token });
   E.datos.pendSol = r.solicitudes; E.datos.pendAbonos = r.abonos;
   pintarNav();
+  const pendTotal = r.abonos + r.solicitudes + r.por_enviar;
+  const fraseA = pendTotal
+    ? "Llevas <b>" + dinero(r.venta_hoy) + "</b> de venta hoy · tienes <b>" + pendTotal + "</b> cosas esperándote"
+    : "Llevas <b>" + dinero(r.venta_hoy) + "</b> de venta hoy y nada pendiente. Bien ahí.";
   $("#vista").innerHTML =
+    saludo(fraseA) +
+    rapidos([["actividad", "Actividad", "qué está pasando"],
+             ["pagos", "Depósitos", r.abonos ? r.abonos + " por cobrar" : "al corriente"],
+             ["almacen", "Bodega", "lo guardado de clientes"],
+             ["recolectar", "Recolección", "ruta del día"]]) +
     '<div class="tablero">' +
       '<div class="mosaico ' + (r.abonos ? "alerta" : "") + '"><div class="cifra">' + r.abonos + "</div><span>depósitos por cobrar</span></div>" +
       '<div class="mosaico ' + (r.solicitudes ? "alerta" : "") + '"><div class="cifra">' + r.solicitudes + "</div><span>solicitudes por revisar</span></div>" +
@@ -3881,7 +3945,22 @@ VISTAS.ajustes = async () => {
 };
 
 /* ===================== 13. relojes ===================== */
+const DIAS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function fechaLarga(d) {
+  return DIAS[d.getDay()] + " " + d.getDate() + " de " + MESES[d.getMonth()];
+}
+function saludoHora(d) {
+  const h = d.getHours();
+  return h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
+}
 setInterval(() => {
+  const r = $("#reloj");
+  if (r) {
+    const d = new Date();
+    r.innerHTML = fechaLarga(d).replace(/^./, c => c.toUpperCase()) + " · <b>" +
+      d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + "</b>";
+  }
   $$("[data-expira]").forEach(el => {
     const falta = new Date(el.dataset.expira) - Date.now();
     if (falta <= 0) {
