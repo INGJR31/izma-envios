@@ -402,7 +402,7 @@ async function subir(file) {
 }
 
 /* ===================== 4. backend de prueba ===================== */
-const LLAVE_DEMO = "izma_demo_v8";
+const LLAVE_DEMO = "izma_demo_v9";
 let BD = null;
 
 function guardarBD() {
@@ -1106,17 +1106,43 @@ const LOCAL = {
     if (u.rol !== "cliente") return { ok: false, motivo: "Solo los clientes piden recolección" };
     const d = p_datos || {};
     if (!String(d.bodega || "").trim()) return { ok: false, motivo: "¿De qué bodega o tienda lo recogemos?" };
-    if (!String(d.referencia || "").trim()) return { ok: false, motivo: "Pon el número de orden o a nombre de quién está" };
+    if (!String(d.referencia || "").trim() && !String(d.a_nombre || "").trim())
+      return { ok: false, motivo: "Pon el número de orden o el nombre con el que está" };
     if (!BD.recolecciones) BD.recolecciones = [];
     BD.recolecciones.push({
       id: uid(), usuario_id: u.id, bodega: d.bodega.trim(), direccion: d.direccion || "",
-      referencia: d.referencia.trim(), descripcion: d.descripcion || "",
+      referencia: d.referencia.trim(), a_nombre: d.a_nombre || "", descripcion: d.descripcion || "",
       piezas: Number(d.piezas || 1), contacto: d.contacto || "", foto: d.foto || "",
       estado: "solicitada", programada: "", recolectada_en: null, recolector: "",
       bultos: 0, peso_kg: 0, costo: 0, costo_cobrado: false, nota_izma: "",
       creado_en: ahora()
     });
     bitacora(u, "pidió recolección", "recoleccion", d.bodega, { referencia: d.referencia });
+    guardarBD();
+    return { ok: true };
+  },
+  lista_clientes({ p_token }) {
+    exige(p_token, ["admin", "vendedor"]);
+    return { ok: true, items: BD.usuarios.filter(u => u.rol === "cliente" && u.estado === "activo")
+      .map(u => ({ id: u.id, nombre: u.nombre, usuario: u.usuario, ciudad: u.ciudad }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre)) };
+  },
+  admin_crear_recoleccion({ p_token, p_usuario, p_datos }) {
+    const a = exige(p_token, ["admin", "vendedor"]);
+    const cli = BD.usuarios.find(u => u.id === p_usuario && u.rol === "cliente");
+    if (!cli) return { ok: false, motivo: "Escoge al cliente" };
+    const d = p_datos || {};
+    if (!String(d.bodega || "").trim()) return { ok: false, motivo: "Falta la bodega o tienda" };
+    if (!BD.recolecciones) BD.recolecciones = [];
+    BD.recolecciones.push({
+      id: uid(), usuario_id: cli.id, bodega: d.bodega.trim(), direccion: d.direccion || "",
+      referencia: d.referencia || "", a_nombre: d.a_nombre || "", descripcion: d.descripcion || "",
+      piezas: Number(d.piezas || 1), contacto: d.contacto || "", foto: "",
+      estado: d.estado || "programada", programada: d.programada || "", recolectada_en: null,
+      recolector: "", bultos: 0, peso_kg: 0, costo: redondea(d.costo || 0), costo_cobrado: false,
+      nota_izma: d.nota_izma || "", creado_en: ahora()
+    });
+    bitacora(a, "dio de alta una recolección", "cliente", cli.usuario, { bodega: d.bodega, a_nombre: d.a_nombre });
     guardarBD();
     return { ok: true };
   },
@@ -1156,6 +1182,8 @@ const LOCAL = {
     }
     Object.assign(r, {
       estado: d.estado || r.estado,
+      a_nombre: d.a_nombre !== undefined ? d.a_nombre : r.a_nombre,
+      referencia: d.referencia !== undefined && d.referencia !== "" ? d.referencia : r.referencia,
       programada: d.programada !== undefined ? d.programada : r.programada,
       recolector: d.recolector !== undefined ? d.recolector : r.recolector,
       bultos: Number(d.bultos || r.bultos || 0), peso_kg: Number(d.peso_kg || r.peso_kg || 0),
@@ -3044,7 +3072,8 @@ VISTAS.recolectar = async () => {
                    ["en_bodega", "En bodega"], ["enviada", "Enviadas"], ["", "Todas"]];
   $("#vista").innerHTML =
     '<div class="fila entre envolver" style="margin-bottom:10px"><h2 style="margin:0">Recolección de paquetes</h2>' +
-      '<span class="gopack">GO PACK</span></div>' +
+      '<div class="fila"><button class="btn kraft chico" id="rc-nueva">Dar de alta</button>' +
+      '<span class="gopack">GO PACK</span></div></div>' +
     '<div class="tablero">' +
       '<div class="mosaico ' + (r.pendientes ? "alerta" : "") + '"><div class="cifra">' + r.pendientes + "</div><span>por recoger</span></div>" +
       '<div class="mosaico"><div class="cifra">' + r.en_bodega + "</div><span>en bodega IZMA</span></div>" +
@@ -3063,7 +3092,8 @@ VISTAS.recolectar = async () => {
         '<div class="fila envolver" style="align-items:flex-start">' +
           (x.foto ? '<img class="evidencia" src="' + esc(x.foto) + '" alt="" data-ver="' + esc(x.foto) + '">' : "") +
           '<div class="crece">' +
-            "<div>Referencia: <b>" + esc(x.referencia) + "</b></div>" +
+            (x.a_nombre ? '<div style="font-weight:600">A nombre de: ' + esc(x.a_nombre) + "</div>" : "") +
+            (x.referencia ? "<div>Orden: <b>" + esc(x.referencia) + "</b></div>" : "") +
             (x.direccion ? '<div class="tenue">' + esc(x.direccion) + "</div>" : "") +
             (x.descripcion ? '<div class="tenue">' + esc(x.descripcion) + "</div>" : "") +
             '<div class="tenue">' + x.piezas + " piezas" + (x.bultos ? " · " + x.bultos + " bultos" : "") +
@@ -3083,6 +3113,44 @@ VISTAS.recolectar = async () => {
     }).join("") || '<div class="vacio"><h3>Nada en este filtro</h3></div>');
 
   $$("[data-f]").forEach(b => b.onclick = () => { E.datos.filtroReco = b.dataset.f; pintar(); });
+  $("#rc-nueva").onclick = async () => {
+    const cl = await rpc("lista_clientes", { p_token: E.token });
+    hoja("<h2>Dar de alta una recolección</h2>" +
+      '<label class="campo"><span>Cliente</span><select id="na-cliente">' +
+        cl.items.map(c => '<option value="' + c.id + '">' + esc(c.nombre) + " · " + esc(c.usuario) + "</option>").join("") +
+      "</select></label>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>Bodega o tienda</span><input id="na-bodega"></label>' +
+        '<label class="campo"><span>Número de orden</span><input id="na-ref"></label></div>' +
+      '<label class="campo"><span>¿A nombre de quién está?</span><input id="na-nombre" placeholder="Como viene etiquetado"></label>' +
+      '<label class="campo"><span>Dirección o zona</span><input id="na-dir"></label>' +
+      '<label class="campo"><span>Qué es</span><input id="na-desc"></label>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Piezas</span><input id="na-piezas" inputmode="numeric" value="1"></label>' +
+        '<label class="campo"><span>Costo de recolección</span><input id="na-costo" inputmode="decimal" value="0"></label></div>' +
+      '<div class="dos">' +
+        '<label class="campo"><span>Día que se recoge</span><input id="na-prog" placeholder="jueves 25"></label>' +
+        '<label class="campo"><span>Estado</span><select id="na-estado">' +
+          Object.keys(ESTADO_RECO).map(k => '<option value="' + k + '"' + (k === "programada" ? " selected" : "") +
+            ">" + ESTADO_RECO[k][0] + "</option>").join("") + "</select></label></div>" +
+      '<div class="mensaje info">El costo se le cobra después, desde Gestionar, cuando ya la tengas recogida.</div>' +
+      '<button class="btn lleno verde" id="na-ok">Dar de alta</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#na-ok").onclick = async () => {
+      try {
+        const r = await rpc("admin_crear_recoleccion", {
+          p_token: E.token, p_usuario: $("#na-cliente").value,
+          p_datos: { bodega: $("#na-bodega").value, referencia: $("#na-ref").value,
+            a_nombre: $("#na-nombre").value, direccion: $("#na-dir").value,
+            descripcion: $("#na-desc").value, piezas: Number($("#na-piezas").value || 1),
+            costo: Number($("#na-costo").value || 0), programada: $("#na-prog").value,
+            estado: $("#na-estado").value }
+        });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Recolección dada de alta", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  };
   $$("[data-reco]").forEach(b => b.onclick = () => {
     const x = d.items.find(y => y.id === b.dataset.reco);
     hoja("<h2>" + esc(x.bodega) + "</h2>" +
@@ -3091,6 +3159,9 @@ VISTAS.recolectar = async () => {
         Object.keys(ESTADO_RECO).map(k =>
           '<option value="' + k + '"' + (x.estado === k ? " selected" : "") + ">" + ESTADO_RECO[k][0] + "</option>").join("") +
       "</select></label>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>A nombre de</span><input id="rc-nombre" value="' + esc(x.a_nombre || "") + '"></label>' +
+        '<label class="campo"><span>Número de orden</span><input id="rc-ref" value="' + esc(x.referencia || "") + '"></label></div>' +
       '<div class="dos">' +
         '<label class="campo"><span>Día que se recoge</span><input id="rc-prog" value="' + esc(x.programada || "") + '" placeholder="jueves 25"></label>' +
         '<label class="campo"><span>Quién recoge</span><input id="rc-quien" value="' + esc(x.recolector || "") + '"></label></div>' +
@@ -3115,6 +3186,7 @@ VISTAS.recolectar = async () => {
           p_token: E.token, p_recoleccion: x.id, p_pin_hash: pin,
           p_datos: {
             estado: $("#rc-estado").value, programada: $("#rc-prog").value, recolector: $("#rc-quien").value,
+            a_nombre: $("#rc-nombre").value, referencia: $("#rc-ref").value,
             bultos: Number($("#rc-bultos").value || 0), peso_kg: Number($("#rc-peso").value || 0),
             costo, cobrar, nota_izma: $("#rc-nota").value
           }
@@ -3135,7 +3207,10 @@ async function recoleccionCliente() {
       '<p class="tenue" style="margin-top:4px">¿Compraste en otra bodega o tienda? Nosotros lo recogemos y lo juntamos con tus envíos.</p>' +
       '<div class="dos">' +
         '<label class="campo"><span>Bodega o tienda</span><input id="rp-bodega" placeholder="Ej. Bodega Otay"></label>' +
-        '<label class="campo"><span>Orden o a nombre de quién está</span><input id="rp-ref"></label></div>' +
+        '<label class="campo"><span>Número de orden o ticket</span><input id="rp-ref"></label></div>' +
+      '<label class="campo"><span>¿A nombre de quién está el paquete?</span>' +
+        '<input id="rp-nombre" placeholder="Tal cual viene etiquetado"></label>' +
+      '<p class="tenue" style="margin:-6px 0 12px">Escríbelo igual que en la etiqueta. Así lo recogemos sin reetiquetar y sin cobrarte ese extra.</p>' +
       '<label class="campo"><span>Dirección o zona</span><input id="rp-dir"></label>' +
       '<label class="campo"><span>Qué es</span><textarea id="rp-desc" placeholder="2 cajas de ropa, 1 televisión…"></textarea></label>' +
       '<div class="dos">' +
@@ -3151,7 +3226,8 @@ async function recoleccionCliente() {
         return '<div class="renglon"><div class="crece">' +
           '<div class="fila entre envolver"><b>' + esc(x.bodega) + "</b>" +
             '<span class="sello ' + et[1] + '">' + et[0] + "</span></div>" +
-          '<div class="tenue">' + esc(x.referencia) + " · " + x.piezas + " piezas · " + fecha(x.creado_en) + "</div>" +
+          '<div class="tenue">' + (x.a_nombre ? "A nombre de " + esc(x.a_nombre) + " · " : "") +
+            esc(x.referencia || "") + " · " + x.piezas + " piezas · " + fecha(x.creado_en) + "</div>" +
           (x.programada ? '<div class="tenue">Se recoge: ' + esc(x.programada) + "</div>" : "") +
           (x.costo ? '<div class="tenue">Costo de recolección: ' + dinero(x.costo) +
             (x.costo_cobrado ? " (ya descontado de tu saldo)" : " (pendiente)") + "</div>" : "") +
@@ -3171,7 +3247,8 @@ async function recoleccionCliente() {
     const b = $("#rp-ok"); b.disabled = true; b.textContent = "Enviando…";
     try {
       const r = await rpc("crear_recoleccion", { p_token: E.token, p_datos: {
-        bodega: $("#rp-bodega").value, referencia: $("#rp-ref").value, direccion: $("#rp-dir").value,
+        bodega: $("#rp-bodega").value, referencia: $("#rp-ref").value,
+        a_nombre: $("#rp-nombre").value, direccion: $("#rp-dir").value,
         descripcion: $("#rp-desc").value, piezas: Number($("#rp-piezas").value || 1),
         contacto: $("#rp-contacto").value, foto: E.evidencia } });
       if (!r.ok) throw new Error(r.motivo);
