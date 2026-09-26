@@ -1345,6 +1345,49 @@ const LOCAL = {
                valor: redondea(clientes.reduce((a, c) => a + c.valor, 0)),
                cajas: (BD.cajas || []).filter(c => c.estado === "solicitada").length } };
   },
+  admin_caja_item({ p_token, p_usuario, p_tipo, p_id, p_accion }) {
+    const a = exige(p_token, ["admin", "vendedor"]);
+    const cli = BD.usuarios.find(u => u.id === p_usuario);
+    if (!cli) return { ok: false, motivo: "Cliente no encontrado" };
+
+    if (p_accion === "sacar") {
+      if (p_tipo === "reco") {
+        const r = (BD.recolecciones || []).find(x => x.id === p_id && x.usuario_id === cli.id);
+        if (r) r.caja_id = null;
+      } else {
+        const i = BD.items.find(x => x.id === p_id);
+        if (i) { i.caja_id = null; i.alm = "en_bodega"; }
+      }
+      guardarBD();
+      return { ok: true };
+    }
+
+    let caja = (BD.cajas || []).find(c => c.usuario_id === cli.id && (c.estado === "abierta" || c.estado === "solicitada"));
+    if (!caja) {
+      if (!BD.cajas) BD.cajas = [];
+      BD.folio_caja = (BD.folio_caja || 0) + 1;
+      const f = new Date();
+      caja = { id: uid(), usuario_id: cli.id,
+        folio: "CJ" + String(f.getFullYear()).slice(2) + String(f.getMonth() + 1).padStart(2, "0") +
+               String(f.getDate()).padStart(2, "0") + String(BD.folio_caja).padStart(3, "0"),
+        estado: "abierta", paqueteria: "", guia: "", bultos: 1, peso_kg: 0,
+        largo_cm: 0, ancho_cm: 0, alto_cm: 0, costo_envio: 0, flete: "por_cobrar", flete_cobrado: false,
+        destino: "", entrega_estimada: "", notas: "", notas_izma: "", enviado_en: null, creado_en: ahora() };
+      BD.cajas.push(caja);
+      bitacora(a, "abrió una caja", "cliente", cli.usuario, { caja: caja.folio });
+    }
+    if (p_tipo === "reco") {
+      const r = (BD.recolecciones || []).find(x => x.id === p_id && x.usuario_id === cli.id);
+      if (!r) return { ok: false, motivo: "No encontrado" };
+      r.caja_id = caja.id;
+    } else {
+      const i = BD.items.find(x => x.id === p_id);
+      if (!i) return { ok: false, motivo: "No encontrado" };
+      i.caja_id = caja.id; i.alm = "en_caja";
+    }
+    guardarBD();
+    return { ok: true, caja: caja.folio };
+  },
   admin_cajas({ p_token, p_estado }) {
     exige(p_token, ["admin", "vendedor"]);
     const items = (BD.cajas || []).filter(c => !p_estado || c.estado === p_estado)
@@ -3604,6 +3647,45 @@ async function miBodega() {
   };
 }
 
+function detalleBodega(b, cli) {
+  const caja = b.caja;
+  const renglon = (x, enCaja) =>
+    '<div class="renglon"><div class="crece">' +
+      '<div style="font-weight:600">' + x.cantidad + " × " + esc(x.titulo) + "</div>" +
+      '<div class="tenue">' + (x.clase === "reco" ? "Recolección · " : "Compra ") + esc(x.origen || "") +
+        (x.dias !== undefined ? " · " + x.dias + (x.dias === 1 ? " día" : " días") + " guardado" : "") + "</div>" +
+    "</div>" +
+    '<div style="text-align:right">' +
+      (x.valor ? '<div class="num" style="font-weight:600">' + dinero(x.valor) + "</div>" : "") +
+      '<button class="btn ' + (enCaja ? "claro" : "kraft") + ' chico" data-mov="' + x.id +
+        '" data-clase="' + x.clase + '" data-accion="' + (enCaja ? "sacar" : "meter") + '">' +
+        (enCaja ? "Sacar" : "A su caja") + "</button></div></div>";
+
+  return '<div class="tarjeta">' +
+    '<button class="btn claro chico" data-volver style="margin-bottom:10px">← Todos los clientes</button>' +
+    '<div class="fila entre envolver"><h2 style="margin:0">' + esc(cli.nombre || "Cliente") + "</h2>" +
+      '<button class="btn claro chico" data-ficha2="' + esc(cli.id || "") + '">Expediente</button></div>' +
+    '<p class="tenue" style="margin:4px 0 10px">' + (cli.usuario ? esc(cli.usuario) + " · " : "") +
+      (cli.tipo_cliente === "foraneo" ? "foráneo" : "local") + (cli.ciudad ? " · " + esc(cli.ciudad) : "") +
+      " · " + b.total.piezas + " piezas guardadas · " + dinero(b.total.valor) +
+      (b.total.dias ? " · la más vieja lleva " + b.total.dias + " días" : "") + "</p>" +
+
+    "<h3>Guardado en bodega</h3>" +
+    (b.en_bodega.length ? b.en_bodega.map(x => renglon(x, false)).join("")
+      : '<p class="tenue" style="margin:0">Nada suelto, ya está todo en su caja.</p>') +
+
+    '<div class="linea-arriba"><div class="fila entre envolver">' +
+      "<h3 style=\"margin:0\">" + (caja.folio ? "Caja " + esc(caja.folio) : "Todavía no tiene caja") + "</h3>" +
+      (caja.estado ? '<span class="sello ' + (ESTADO_CAJA[caja.estado] || ["", ""])[1] + '">' +
+        (ESTADO_CAJA[caja.estado] || [caja.estado])[0] + "</span>" : "") + "</div>" +
+      (caja.contenido.length
+        ? caja.contenido.map(x => renglon(x, true)).join("") +
+          '<div class="total"><span>' + caja.piezas + " piezas</span><span class=\"cifra\">" + dinero(caja.valor) + "</span></div>" +
+          '<button class="btn lleno verde" data-preparar="' + caja.id + '">Preparar envío de esta caja</button>'
+        : '<p class="tenue" style="margin:0">Mete piezas de arriba para armarle la caja.</p>') +
+    "</div></div>";
+}
+
 async function bodegaAdmin() {
   const verCliente = E.datos.bodegaCliente || "";
   const d = await rpc("admin_bodega", { p_token: E.token, p_usuario: verCliente || null });
@@ -3618,20 +3700,7 @@ async function bodegaAdmin() {
       '<div class="mosaico ' + (d.total.cajas ? "alerta" : "") + '"><div class="cifra">' + d.total.cajas +
         "</div><span>cajas que piden envío</span></div></div>" +
 
-    (d.detalle ? '<div class="tarjeta">' +
-      '<button class="btn claro chico" data-volver style="margin-bottom:10px">← Todos los clientes</button>' +
-      "<h2>Lo que tiene guardado</h2>" +
-      (d.detalle.en_bodega.length ? d.detalle.en_bodega.map(x =>
-        '<div class="renglon"><div class="crece"><div style="font-weight:600">' + x.cantidad + " × " + esc(x.titulo) + "</div>" +
-        '<div class="tenue">' + (x.clase === "reco" ? "Recolección · " : "Compra ") + esc(x.origen || "") +
-        " · " + x.dias + " días</div></div>" +
-        '<div class="num">' + (x.valor ? dinero(x.valor) : "") + "</div></div>").join("")
-        : '<p class="tenue" style="margin:0">Sin piezas sueltas.</p>') +
-      (d.detalle.caja.contenido.length ? '<div class="linea-arriba"><b>En su caja ' + esc(d.detalle.caja.folio) + "</b>" +
-        d.detalle.caja.contenido.map(x => '<div class="fila entre" style="padding:3px 0"><span>' +
-          x.cantidad + " × " + esc(x.titulo) + '</span><span class="num">' + (x.valor ? dinero(x.valor) : "") +
-          "</span></div>").join("") + "</div>" : "") +
-      "</div>" : "") +
+    (d.detalle ? detalleBodega(d.detalle, d.clientes.find(c => c.id === verCliente) || {}) : "") +
 
     '<div class="tarjeta"><h2>Clientes con mercancía en bodega</h2>' +
       (d.clientes.length ? d.clientes.map(c =>
@@ -3665,11 +3734,28 @@ async function bodegaAdmin() {
       }).join("") : '<p class="tenue" style="margin:0">Nada en este filtro.</p>') + "</div>";
 
   $$("[data-vercli]").forEach(b => b.onclick = () => { E.datos.bodegaCliente = b.dataset.vercli; pintar(); });
+  $$("[data-mov]").forEach(b => b.onclick = async () => {
+    try {
+      const r = await rpc("admin_caja_item", { p_token: E.token, p_usuario: verCliente,
+        p_tipo: b.dataset.clase, p_id: b.dataset.mov, p_accion: b.dataset.accion });
+      if (!r.ok) throw new Error(r.motivo);
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  if ($("[data-preparar]")) $("[data-preparar]").onclick = () => {
+    const id = $("[data-preparar]").dataset.preparar;
+    const c = cajas.items.find(x => x.id === id);
+    if (!c) return aviso("Refresca la pantalla e intenta otra vez", "mal");
+    abrirCaja(c);
+  };
   $$("[data-ficha2]").forEach(b => b.onclick = () => { E.datos.ficha = b.dataset.ficha2; ir("cliente"); });
   if ($("[data-volver]")) $("[data-volver]").onclick = () => { E.datos.bodegaCliente = ""; pintar(); };
   $$("[data-fc]").forEach(b => b.onclick = () => { E.datos.filtroCaja = b.dataset.fc; pintar(); });
-  $$("[data-caja]").forEach(b => b.onclick = () => {
-    const c = cajas.items.find(x => x.id === b.dataset.caja);
+  $$("[data-caja]").forEach(b => b.onclick = () => abrirCaja(cajas.items.find(x => x.id === b.dataset.caja)));
+}
+
+function abrirCaja(c) {
+  {
     hoja("<h2>Caja " + esc(c.folio) + "</h2>" +
       '<p class="tenue" style="margin-top:0">' + esc(c.cliente || "") + " · " + c.piezas + " piezas" +
         (c.direccion ? "<br>" + esc(c.direccion) : "") + "</p>" +
@@ -3733,7 +3819,7 @@ async function bodegaAdmin() {
         cerrarHoja(); aviso("Caja actualizada", "bien"); pintar();
       } catch (err) { aviso(err.message, "mal"); }
     };
-  });
+  }
 }
 
 VISTAS.cliente = async () => {
