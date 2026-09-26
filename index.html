@@ -380,25 +380,44 @@ async function comprimir(file, max, calidad) {
 const leerDataURL = f => new Promise((res, rej) => {
   const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f);
 });
-async function subir(file) {
+const pesa = b => b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.round(b / 1024) + " KB";
+
+/* Sube fotos y video. Las fotos se comprimen; el video va tal cual.
+   avance(porcentaje) se llama mientras sube, para la barra. */
+async function subir(file, avance) {
+  const esVideo = (file.type || "").startsWith("video/");
   if (MODO_DEMO) {
-    if (file.type.startsWith("video/")) {
-      if (file.size > 3.5 * 1024 * 1024) throw new Error("En modo demo los videos deben pesar menos de 3.5 MB");
+    if (esVideo) {
+      if (file.size > 3.5 * 1024 * 1024) throw new Error("En la copia de prueba el video debe pesar menos de 3.5 MB. En la app real no hay ese límite.");
       return { url: await leerDataURL(file), tipo: "video" };
     }
     const chico = await comprimir(file, 760, 0.6);
     return { url: await leerDataURL(chico), tipo: "foto" };
   }
-  const listo = await comprimir(file, 1400, 0.82);
-  const ext = (listo.name.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
+
+  const listo = esVideo ? file : await comprimir(file, 1600, 0.85);
+  const ext = (file.name.split(".").pop() || (esVideo ? "mp4" : "jpg")).toLowerCase().slice(0, 5);
   const ruta = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
-  const r = await fetch(SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/" + ruta, {
-    method: "POST",
-    headers: { apikey: SUPABASE_ANON, Authorization: "Bearer " + SUPABASE_ANON, "Content-Type": listo.type || "application/octet-stream" },
-    body: listo
+
+  return new Promise((res, rej) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", SUPABASE_URL + "/storage/v1/object/" + BUCKET + "/" + ruta);
+    x.setRequestHeader("apikey", SUPABASE_ANON);
+    x.setRequestHeader("Authorization", "Bearer " + SUPABASE_ANON);
+    x.setRequestHeader("Content-Type", listo.type || "application/octet-stream");
+    x.upload.onprogress = e => { if (avance && e.lengthComputable) avance(Math.round(e.loaded / e.total * 100)); };
+    x.onload = () => {
+      if (x.status >= 200 && x.status < 300) {
+        res({ url: SUPABASE_URL + "/storage/v1/object/public/" + BUCKET + "/" + ruta, tipo: esVideo ? "video" : "foto" });
+      } else if (x.status === 413) {
+        rej(new Error("El archivo pesa " + pesa(listo.size) + " y el bucket no lo acepta. Sube el límite en Storage."));
+      } else {
+        rej(new Error("No se pudo subir el archivo (" + x.status + ")"));
+      }
+    };
+    x.onerror = () => rej(new Error("Se cortó la subida. Revisa la señal."));
+    x.send(listo);
   });
-  if (!r.ok) throw new Error("No se pudo subir el archivo");
-  return { url: SUPABASE_URL + "/storage/v1/object/public/" + BUCKET + "/" + ruta, tipo: listo.type.startsWith("video") ? "video" : "foto" };
 }
 
 /* ===================== 4. backend de prueba ===================== */
@@ -663,7 +682,7 @@ const LOCAL = {
     const u = exige(p_token);
     liberar();
     const q = String(p_busqueda || "").toLowerCase();
-    const items = BD.productos.filter(p => p.estado !== "oculto")
+    const items = BD.productos.filter(p => p.estado !== "oculto" && p.estado !== "archivado")
       .filter(p => !p_categoria || p.categoria === p_categoria)
       .filter(p => !q || (p.titulo + " " + p.descripcion + " " + p.categoria).toLowerCase().includes(q))
       .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
@@ -672,7 +691,7 @@ const LOCAL = {
         mio: BD.apartados.filter(a => a.estado === "activo" && a.producto_id === p.id && a.usuario_id === u.id)
                          .reduce((s, a) => s + a.cantidad, 0)
       }));
-    const categorias = [...new Set(BD.productos.filter(p => p.estado !== "oculto").map(p => p.categoria))];
+    const categorias = [...new Set(BD.productos.filter(p => p.estado !== "oculto" && p.estado !== "archivado").map(p => p.categoria))];
     return { ok: true, items, categorias, saldo: u.saldo, config: Object.assign({}, BD.config) };
   },
   apartar({ p_token, p_producto, p_cantidad }) {
@@ -762,6 +781,7 @@ const LOCAL = {
       a.estado = "confirmado"; a.pedido_id = ped.id;
     });
     movimiento(u, "compra", -total, "Compra " + folio, folio);
+    bitacora(u, "confirmó una compra", "pedido", folio, { total, piezas: vivos.reduce((a, x) => a + x.cantidad, 0) });
     guardarBD();
     return { ok: true, folio, pedido: ped.id, total, saldo: u.saldo, config: Object.assign({}, BD.config) };
   },
@@ -821,6 +841,8 @@ const LOCAL = {
       estado: "pendiente", nota_izma: "", monto_cobrado: null,
       creado_en: ahora(), resuelto_en: null
     });
+    bitacora(u, "mandó un depósito", "abono", (d.metodo === "retiro_sin_tarjeta" ? "retiro sin tarjeta" : "transferencia"),
+             { monto, vence: d.vence_en || "" });
     guardarBD();
     return { ok: true };
   },
@@ -847,6 +869,8 @@ const LOCAL = {
       media: p_datos.media || [], vendedor_id: u.id, venta_id: v ? v.id : null,
       estado: "activo", creado_en: ahora()
     });
+    bitacora(u, "subió mercancía", "producto", p_datos.titulo.trim(),
+             { precio: Number(p_datos.precio || 0), piezas: cant, venta: v ? v.nombre : "" });
     guardarBD();
     return { ok: true, venta: v ? v.nombre : "" };
   },
@@ -934,8 +958,7 @@ const LOCAL = {
     v.cerrado_en = ahora();
     v.corte = r;
     bitacora(u, "cerró venta", "venta", v.nombre, r);
-    BD.productos.filter(p => p.venta_id === v.id && p.estado === "activo" && p.disponible > 0)
-      .forEach(p => p.estado = "oculto");
+    BD.productos.filter(p => p.venta_id === v.id).forEach(p => p.estado = "archivado");
     guardarBD();
     return { ok: true, folio: v.folio_ticket };
   },
@@ -1478,6 +1501,19 @@ const LOCAL = {
     guardarBD();
     return { ok: true, saldo: cli ? cli.saldo : 0 };
   },
+  admin_actividad({ p_token, p_desde }) {
+    exige(p_token, ["admin"]);
+    const todo = (BD.bitacora || []).slice().sort((a, b) => b.creado_en.localeCompare(a.creado_en));
+    const nuevas = p_desde ? todo.filter(b => b.creado_en > p_desde).length : 0;
+    return { ok: true, items: todo.slice(0, 60), nuevas,
+      pendientes: {
+        solicitudes: BD.solicitudes.filter(s => s.estado === "pendiente").length,
+        depositos: BD.abonos.filter(a => a.estado === "pendiente").length,
+        recolecciones: (BD.recolecciones || []).filter(r => r.estado === "solicitada").length,
+        cajas: (BD.cajas || []).filter(c => c.estado === "solicitada").length,
+        pedidos: BD.pedidos.filter(p => p.estado === "preparando").length
+      } };
+  },
   admin_bitacora({ p_token, p_busqueda }) {
     exige(p_token, ["admin"]);
     const q = String(p_busqueda || "").toLowerCase();
@@ -1582,11 +1618,13 @@ const LOCAL = {
     devolverPartida(i, p_motivo);
     return { ok: true };
   },
-  admin_productos({ p_token, p_busqueda }) {
+  admin_productos({ p_token, p_busqueda, p_archivados }) {
     exige(p_token, ["admin"]);
     liberar();
     const q = String(p_busqueda || "").toLowerCase();
-    const items = BD.productos.filter(p => !q || p.titulo.toLowerCase().includes(q))
+    const items = BD.productos
+      .filter(p => p_archivados ? p.estado === "archivado" : p.estado !== "archivado")
+      .filter(p => !q || p.titulo.toLowerCase().includes(q))
       .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
       .map(p => Object.assign({}, p, {
         apartados: apartadasDe(p.id),
@@ -1670,7 +1708,7 @@ const MENUS = {
             ["almacen", "Mi bodega"], ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
   vendedor: [["ventas", "Mis ventas"], ["publicar", "Subir producto"], ["inventario", "Lo que subí"],
              ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
-  admin: [["resumen", "Resumen"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
+  admin: [["resumen", "Resumen"], ["actividad", "Actividad"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
           ["almacen", "Bodega"], ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
           ["usuarios", "Clientes"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"]]
 };
@@ -1687,6 +1725,7 @@ function pintarNav() {
     if (id === "carrito" && E.pendientes) globo = '<i class="globo num">' + E.pendientes + "</i>";
     if (id === "solicitudes" && E.datos.pendSol) globo = '<i class="globo num">' + E.datos.pendSol + "</i>";
     if (id === "pagos" && E.datos.pendAbonos) globo = '<i class="globo num">' + E.datos.pendAbonos + "</i>";
+    if (id === "actividad" && E.datos.nuevas) globo = '<i class="globo num">' + E.datos.nuevas + "</i>";
     return '<button data-vista="' + id + '" aria-current="' + (E.vista === id) + '">' + t + globo + "</button>";
   }).join("") + '<button data-salir>Salir</button>';
 }
@@ -2176,7 +2215,7 @@ VISTAS.publicar = async () => {
     '<div class="tarjeta"><h2>Subir producto a la bodega</h2>' +
       '<p class="tenue" style="margin-top:0">Foto o video, precio de venta y cuántas piezas hay en existencia.</p>' +
       '<label class="suelta"><b>Agregar fotos o video</b>' +
-        '<div class="tenue" style="color:#0B6B3A">Puedes subir varias. Las fotos se comprimen solas.</div>' +
+        '<div class="tenue" style="color:#0B6B3A">Fotos y video, las que quieras. Las fotos se comprimen solas.</div>' +
         '<input type="file" id="archivos" accept="image/*,video/*" multiple hidden></label>' +
       '<div class="barra" id="barra" hidden><i></i></div>' +
       '<div class="tiras" id="tiras"></div>' +
@@ -2198,8 +2237,10 @@ VISTAS.publicar = async () => {
     const barra = $("#barra"), i = barra.querySelector("i");
     barra.hidden = false;
     for (let k = 0; k < files.length; k++) {
-      try { E.media.push(await subir(files[k])); }
-      catch (err) { aviso(err.message, "mal"); }
+      const base = k / files.length * 100, tramo = 100 / files.length;
+      try {
+        E.media.push(await subir(files[k], p => { i.style.width = (base + tramo * p / 100) + "%"; }));
+      } catch (err) { aviso(err.message, "mal"); }
       i.style.width = Math.round(((k + 1) / files.length) * 100) + "%";
       pintarTiras();
     }
@@ -2296,7 +2337,7 @@ VISTAS.ventas = async () => {
   $$("[data-cerrar-venta]").forEach(b => b.onclick = async () => {
     const v = d.items.find(x => x.id === b.dataset.cerrarVenta);
     if (v.por_confirmar && !confirm("Quedan " + v.por_confirmar + " partidas sin confirmar. ¿Cerrar de todos modos?")) return;
-    if (!confirm("Al cerrar se genera el ticket y lo que sobró se oculta del catálogo. ¿Cerramos?")) return;
+    if (!confirm("Al cerrar se genera el ticket y la mercancía de esta venta sale del catálogo; queda solo en el historial. ¿Cerramos?")) return;
     try {
       const r = await rpc("cerrar_venta", { p_token: E.token, p_venta: v.id });
       if (!r.ok) throw new Error(r.motivo);
@@ -2368,7 +2409,7 @@ VISTAS.venta = async () => {
     } catch (err) { aviso(err.message, "mal"); }
   });
   if ($("#cerrar-aqui")) $("#cerrar-aqui").onclick = async () => {
-    if (!confirm("Al cerrar se genera el ticket y lo que sobró se oculta del catálogo. ¿Cerramos?")) return;
+    if (!confirm("Al cerrar se genera el ticket y la mercancía de esta venta sale del catálogo; queda solo en el historial. ¿Cerramos?")) return;
     try {
       const r = await rpc("cerrar_venta", { p_token: E.token, p_venta: v.id });
       if (!r.ok) throw new Error(r.motivo);
@@ -2759,11 +2800,15 @@ VISTAS.pedidos = async () => {
 };
 
 VISTAS.productos = async () => {
-  const d = await rpc("admin_productos", { p_token: E.token, p_busqueda: E.busqueda });
+  const arch = !!E.datos.verArchivados;
+  const d = await rpc("admin_productos", { p_token: E.token, p_busqueda: E.busqueda, p_archivados: arch });
   $("#vista").innerHTML =
     '<div class="buscador"><input id="q" placeholder="Buscar producto…" value="' + esc(E.busqueda) +
       '"><button class="btn" id="bq">Buscar</button>' +
       '<button class="btn kraft" data-vista="publicar">Subir</button></div>' +
+    '<div class="filtros"><button data-arch="0" aria-current="' + (!arch) + '">En bodega</button>' +
+      '<button data-arch="1" aria-current="' + arch + '">Archivados de ventas cerradas</button></div>' +
+    (arch ? '<div class="mensaje info">Mercancía de jornadas ya cerradas. Queda solo de historial, los clientes no la ven.</div>' : "") +
     '<div class="rejilla">' + (d.items.map(p => {
       const m = (p.media || [])[0];
       return '<article class="pieza"><div class="lienzo">' +
@@ -2782,6 +2827,7 @@ VISTAS.productos = async () => {
     }).join("") || '<div class="vacio"><h3>Sin productos</h3></div>') + "</div>";
   $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
   $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
+  $$("[data-arch]").forEach(b => b.onclick = () => { E.datos.verArchivados = b.dataset.arch === "1"; pintar(); });
   enlazarEditar(d.items);
 };
 
@@ -3708,6 +3754,44 @@ VISTAS.cliente = async () => {
         : '<p class="tenue" style="margin:0">Sin movimientos.</p>'));
 };
 
+VISTAS.actividad = async () => {
+  const visto = almacen.get("izma_visto") || "";
+  const d = await rpc("admin_actividad", { p_token: E.token, p_desde: visto });
+  const p = d.pendientes;
+  almacen.set("izma_visto", new Date().toISOString());
+  E.datos.nuevas = 0;
+  pintarNav();
+
+  const pend = [
+    ["solicitudes", p.solicitudes, "solicitudes de acceso", "solicitudes"],
+    ["pagos", p.depositos, "depósitos por cobrar", "pagos"],
+    ["recolectar", p.recolecciones, "recolecciones nuevas", "recolectar"],
+    ["almacen", p.cajas, "cajas que piden envío", "almacen"],
+    ["pedidos", p.pedidos, "pedidos por preparar", "pedidos"]
+  ].filter(x => x[1] > 0);
+
+  $("#vista").innerHTML =
+    (pend.length
+      ? '<div class="tablero">' + pend.map(x =>
+        '<div class="mosaico alerta" data-vista="' + x[3] + '" style="cursor:pointer">' +
+        '<div class="cifra">' + x[1] + "</div><span>" + x[2] + "</span></div>").join("") + "</div>"
+      : '<div class="mensaje verde">Todo al corriente, nada pendiente de tu lado.</div>') +
+    '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">Lo que está pasando</h2>' +
+      '<button class="btn claro chico" id="ac-refrescar">Actualizar</button></div>' +
+      '<p class="tenue" style="margin:4px 0 10px">Movimientos de clientes y vendedores, del más nuevo al más viejo.</p>' +
+      (d.items.length ? d.items.map(b => {
+        const nuevo = visto && b.creado_en > visto;
+        return '<div class="mov"' + (nuevo ? ' style="background:var(--kraft-claro);border-radius:8px;padding:6px 8px"' : "") + ">" +
+          '<div><div><b>' + esc(b.actor_usuario) + "</b> " + esc(b.accion) +
+            (b.ref ? " · " + esc(b.ref) : "") + (nuevo ? ' <span class="sello kraft">nuevo</span>' : "") + "</div>" +
+          '<div class="tenue">' + fecha(b.creado_en) +
+            (b.detalle ? " · " + esc(JSON.stringify(b.detalle).replace(/[{}"]/g, "").replace(/,/g, ", ")) : "") +
+          "</div></div></div>";
+      }).join("") : '<p class="tenue" style="margin:0">Todavía no hay movimiento.</p>') + "</div>";
+
+  $("#ac-refrescar").onclick = () => pintar();
+};
+
 VISTAS.bitacora = async () => {
   const d = await rpc("admin_bitacora", { p_token: E.token, p_busqueda: E.busqueda });
   $("#vista").innerHTML =
@@ -3819,8 +3903,24 @@ setInterval(() => {
 }, 1000);
 
 setInterval(() => {
-  if (E.yo && E.vista === "bodega" && document.visibilityState === "visible" && !$("#capa").classList.contains("abierta")) pintar();
-}, 25000);
+  if (!E.yo || document.visibilityState !== "visible" || $("#capa").classList.contains("abierta")) return;
+  if (E.vista === "bodega" || E.vista === "venta" || E.vista === "actividad") pintar();
+}, 20000);
+
+/* Aviso de lo que va pasando, para administración */
+setInterval(async () => {
+  if (!E.yo || E.yo.rol !== "admin" || document.visibilityState !== "visible") return;
+  if (E.vista === "actividad" || $("#capa").classList.contains("abierta")) return;
+  try {
+    const d = await rpc("admin_actividad", { p_token: E.token, p_desde: almacen.get("izma_visto") || "" });
+    if (d.nuevas !== E.datos.nuevas) { E.datos.nuevas = d.nuevas; pintarNav(); }
+    if (d.nuevas && d.nuevas > (E.datos.avisadas || 0)) {
+      E.datos.avisadas = d.nuevas;
+      const u = d.items[0];
+      if (u) aviso(u.actor_usuario + " " + u.accion + (u.ref ? " · " + u.ref : ""));
+    }
+  } catch {}
+}, 30000);
 
 /* ===================== 14. errores visibles ===================== */
 function fallo(msj) {
