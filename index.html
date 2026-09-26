@@ -354,6 +354,11 @@ const almacen = {
 
 /* ===================== 3. capa de datos ===================== */
 async function rpc(fn, args = {}) {
+  Object.keys(args).forEach(k => {
+    if (args[k] === "" && (k === "p_usuario" || k === "p_pedido" || k === "p_caja" ||
+        k === "p_item" || k === "p_venta" || k === "p_abono" || k === "p_recoleccion" ||
+        k === "p_producto" || k === "p_apartado" || k === "p_solicitud" || k === "p_id")) args[k] = null;
+  });
   if (MODO_DEMO) {
     if (!BD) await cargarBD();
     await new Promise(r => setTimeout(r, 60));
@@ -3601,7 +3606,7 @@ async function miBodega() {
 
 async function bodegaAdmin() {
   const verCliente = E.datos.bodegaCliente || "";
-  const d = await rpc("admin_bodega", { p_token: E.token, p_usuario: verCliente });
+  const d = await rpc("admin_bodega", { p_token: E.token, p_usuario: verCliente || null });
   const cajas = await rpc("admin_cajas", { p_token: E.token, p_estado: E.datos.filtroCaja || "" });
   const filtros = [["", "Todas"], ["abierta", "Armando"], ["solicitada", "Piden envío"],
                    ["cerrada", "Empacadas"], ["enviada", "Enviadas"]];
