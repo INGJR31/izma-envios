@@ -1161,7 +1161,13 @@ const LOCAL = {
         return Object.assign({}, r, { cliente: c.nombre, usuario: c.usuario, telefono: c.telefono, ciudad: c.ciudad });
       });
     const todas = BD.recolecciones || [];
-    return { ok: true, items, resumen: {
+    const ruta = todas.filter(r => r.estado === "solicitada" || r.estado === "programada")
+      .map(r => {
+        const c = BD.usuarios.find(u => u.id === r.usuario_id) || {};
+        return Object.assign({}, r, { cliente: c.nombre, usuario: c.usuario, telefono: c.telefono });
+      })
+      .sort((a, b) => String(a.bodega).localeCompare(String(b.bodega)));
+    return { ok: true, items, ruta, resumen: {
       pendientes: todas.filter(r => r.estado === "solicitada" || r.estado === "programada").length,
       en_bodega: todas.filter(r => r.estado === "en_bodega").length,
       piezas: todas.filter(r => r.estado !== "cancelada").reduce((a, r) => a + Number(r.piezas || 0), 0),
@@ -3103,11 +3109,99 @@ VISTAS.envios = async () => {
 const ESTADO_RECO = {
   solicitada:  ["Solicitada", "kraft"],
   programada:  ["Programada", "kraft"],
+  no_recogida: ["No se pudo recoger", "rojo"],
   recolectada: ["Ya la recogimos", "verde"],
   en_bodega:   ["En bodega IZMA", "verde"],
   enviada:     ["Enviada al cliente", "verde"],
   cancelada:   ["Cancelada", ""]
 };
+
+const mapsBuscar = t => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(t);
+
+function bloqueRuta(ruta) {
+  if (!ruta.length) return '<div class="mensaje verde">No hay nada pendiente de recoger. Ruta limpia.</div>';
+  const porBodega = {};
+  ruta.forEach(r => { (porBodega[r.bodega] = porBodega[r.bodega] || []).push(r); });
+  const paradas = Object.keys(porBodega);
+  const puntos = paradas.map(b => {
+    const uno = porBodega[b][0];
+    return (uno.direccion ? uno.direccion + ", " : "") + b + ", Tijuana";
+  });
+  const liga = puntos.length === 1
+    ? mapsBuscar(puntos[0])
+    : "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(puntos[puntos.length - 1]) +
+      (puntos.length > 1 ? "&waypoints=" + puntos.slice(0, -1).slice(0, 9).map(encodeURIComponent).join("%7C") : "");
+
+  return '<div class="tarjeta" style="margin-bottom:12px">' +
+    '<div class="fila entre envolver"><h2 style="margin:0">Ruta de recolección</h2>' +
+      '<a class="btn verde chico" style="text-decoration:none" target="_blank" rel="noopener" href="' + liga + '">Abrir ruta en Maps</a></div>' +
+    '<p class="tenue" style="margin:4px 0 10px">' + paradas.length + (paradas.length === 1 ? " parada · " : " paradas · ") +
+      ruta.length + (ruta.length === 1 ? " paquete" : " paquetes") +
+      ". Lo que marques como recogido sale de esta lista.</p>" +
+    paradas.map((b, n) => {
+      const items = porBodega[b];
+      const dir = (items[0].direccion ? items[0].direccion + ", " : "") + b + ", Tijuana";
+      return '<div class="linea-arriba">' +
+        '<div class="fila entre envolver"><b>' + (n + 1) + ". " + esc(b) + "</b>" +
+          '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="' +
+            mapsBuscar(dir) + '">Cómo llegar</a></div>' +
+        (items[0].direccion ? '<div class="tenue">' + esc(items[0].direccion) + "</div>" : "") +
+        items.map(r => '<div class="renglon"><div class="crece">' +
+          (r.a_nombre ? '<div style="font-weight:600">A nombre de: ' + esc(r.a_nombre) + "</div>" : "") +
+          '<div class="tenue">' + esc(r.cliente || "") + (r.referencia ? " · orden " + esc(r.referencia) : "") +
+            " · " + r.piezas + " piezas" + (r.programada ? " · " + esc(r.programada) : "") + "</div>" +
+          (r.descripcion ? '<div class="tenue">' + esc(r.descripcion) + "</div>" : "") +
+          '<div class="fila" style="margin-top:6px">' +
+            '<button class="btn verde chico" data-recogi="' + r.id + '">Recogido</button>' +
+            '<button class="btn claro chico" data-nopude="' + r.id + '">No se pudo</button></div>' +
+        "</div></div>").join("") + "</div>";
+    }).join("") + "</div>";
+}
+
+function enlazarRuta(ruta) {
+  $$("[data-recogi]").forEach(b => b.onclick = () => {
+    const r = ruta.find(x => x.id === b.dataset.recogi);
+    hoja("<h2>Recogido</h2>" +
+      '<p class="tenue" style="margin-top:0">' + esc(r.bodega) +
+        (r.a_nombre ? " · a nombre de " + esc(r.a_nombre) : "") + "</p>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>Bultos</span><input id="rg-bultos" inputmode="numeric" value="' + (r.piezas || 1) + '"></label>' +
+        '<label class="campo"><span>Peso (kg)</span><input id="rg-peso" inputmode="decimal"></label></div>' +
+      '<label class="campo"><span>Costo de la recolección</span><input id="rg-costo" inputmode="decimal" value="' + (r.costo || 0) + '"></label>' +
+      (E.yo.rol === "admin" && !r.costo_cobrado
+        ? '<label class="campo"><span>¿Se lo cobramos ya a su saldo?</span><select id="rg-cobrar">' +
+          '<option value="no">Todavía no</option><option value="si">Sí, descontar ahora</option></select></label>' : "") +
+      '<label class="campo"><span>Nota (opcional)</span><input id="rg-nota"></label>' +
+      '<button class="btn lleno verde" id="rg-ok">Guardar y sacar de la ruta</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#rg-ok").onclick = async () => {
+      const cobrar = $("#rg-cobrar") && $("#rg-cobrar").value === "si";
+      const costo = Number($("#rg-costo").value || 0);
+      try {
+        let pin = null;
+        if (cobrar && costo > 0) { pin = await pedirPin("cobrarle la recolección"); if (!pin) return; }
+        const res = await rpc("admin_actualizar_recoleccion", {
+          p_token: E.token, p_recoleccion: r.id, p_pin_hash: pin,
+          p_datos: { estado: "recolectada", bultos: Number($("#rg-bultos").value || 0),
+                     peso_kg: Number($("#rg-peso").value || 0), costo, cobrar,
+                     recolector: E.yo.nombre, nota_izma: $("#rg-nota").value }
+        });
+        if (!res.ok) throw new Error(res.motivo);
+        cerrarHoja(); aviso("Recogido. Ya está en bodega.", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
+  $$("[data-nopude]").forEach(b => b.onclick = async () => {
+    const motivo = prompt("¿Por qué no se pudo? Lo verá el cliente.", "No estaba el paquete");
+    if (motivo === null) return;
+    try {
+      const r = await rpc("admin_actualizar_recoleccion", { p_token: E.token, p_recoleccion: b.dataset.nopude,
+        p_datos: { estado: "no_recogida", nota_izma: motivo } });
+      if (!r.ok) throw new Error(r.motivo);
+      aviso("Marcada como no recogida"); pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+}
 
 VISTAS.recolectar = async () => {
   if (E.yo.rol === "cliente") return recoleccionCliente();
@@ -3115,7 +3209,7 @@ VISTAS.recolectar = async () => {
   const d = await rpc("admin_recolecciones", { p_token: E.token, p_estado: filtro });
   const r = d.resumen;
   const filtros = [["solicitada", "Nuevas"], ["programada", "Programadas"], ["recolectada", "Recogidas"],
-                   ["en_bodega", "En bodega"], ["enviada", "Enviadas"], ["", "Todas"]];
+                   ["en_bodega", "En bodega"], ["no_recogida", "No se pudo"], ["enviada", "Enviadas"], ["", "Todas"]];
   $("#vista").innerHTML =
     '<div class="fila entre envolver" style="margin-bottom:10px"><h2 style="margin:0">Recolección de paquetes</h2>' +
       '<div class="fila"><button class="btn kraft chico" id="rc-nueva">Dar de alta</button>' +
@@ -3125,6 +3219,7 @@ VISTAS.recolectar = async () => {
       '<div class="mosaico"><div class="cifra">' + r.en_bodega + "</div><span>en bodega IZMA</span></div>" +
       '<div class="mosaico"><div class="cifra">' + r.piezas + "</div><span>piezas</span></div>" +
       '<div class="mosaico"><div class="cifra">' + dinero(r.cobrado) + "</div><span>cobrado por recolección</span></div></div>" +
+    bloqueRuta(d.ruta || []) +
     '<div class="filtros">' + filtros.map(f =>
       '<button data-f="' + f[0] + '" aria-current="' + (filtro === f[0]) + '">' + f[1] + "</button>").join("") + "</div>" +
     (d.items.map(x => {
@@ -3158,6 +3253,7 @@ VISTAS.recolectar = async () => {
         "</div></div>";
     }).join("") || '<div class="vacio"><h3>Nada en este filtro</h3></div>');
 
+  enlazarRuta(d.ruta || []);
   $$("[data-f]").forEach(b => b.onclick = () => { E.datos.filtroReco = b.dataset.f; pintar(); });
   $("#rc-nueva").onclick = async () => {
     const cl = await rpc("lista_clientes", { p_token: E.token });
