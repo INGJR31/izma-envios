@@ -45,10 +45,16 @@ button{cursor:pointer}
 .quien b{display:block;color:#fff;font-size:13px}
 .quien .bolsa{display:inline-block;margin-top:3px;background:rgba(255,255,255,.14);padding:1px 8px;border-radius:999px;color:#fff;font-weight:600}
 .quien .bolsa.deuda{background:var(--sello)}
-.nav{display:flex;gap:6px;overflow-x:auto;padding:0 14px 10px;max-width:1080px;margin:0 auto;scrollbar-width:none}
-.nav::-webkit-scrollbar{display:none}
+.nav{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 12px;max-width:1080px;margin:0 auto}
 .nav button{border:1px solid rgba(255,255,255,.22);background:transparent;color:#C9D0D2;padding:7px 13px;border-radius:999px;white-space:nowrap;font-weight:500;font-size:14px}
 .nav button[aria-current="true"]{background:#fff;color:var(--tinta);border-color:#fff}
+.nav button[data-salir]{margin-left:auto;border-color:rgba(192,57,43,.7);color:#F0A9A2}
+.nav button[data-salir]:hover{background:var(--sello);color:#fff;border-color:var(--sello)}
+@media (max-width:520px){
+  .nav{gap:5px}
+  .nav button{padding:7px 11px;font-size:13px}
+  .nav button[data-salir]{margin-left:0}
+}
 .nav .globo{background:var(--sello);color:#fff;border-radius:999px;padding:1px 6px;margin-left:6px;font-size:11px;font-weight:600;font-style:normal}
 main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
 .cinta-demo{background:var(--kraft);color:#0B2A18;font-size:12px;font-weight:600;text-align:center;padding:5px 12px}
@@ -1784,7 +1790,7 @@ const MENUS = {
              ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
   admin: [["resumen", "Resumen"], ["actividad", "Actividad"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
           ["almacen", "Bodega"], ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
-          ["usuarios", "Clientes"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"]]
+          ["usuarios", "Clientes"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"], ["cuenta", "Mi cuenta"]]
 };
 function saludo(frase) {
   const d = new Date();
