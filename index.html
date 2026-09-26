@@ -31,7 +31,7 @@ button{cursor:pointer}
 .tope{position:sticky;top:0;z-index:30;background:var(--tinta);color:#fff;box-shadow:var(--sombra)}
 .tope-fila{display:flex;align-items:center;gap:12px;padding:10px 14px;max-width:1080px;margin:0 auto}
 .marca{font-size:26px;font-weight:700;line-height:1;position:relative;padding:0 6px;z-index:0}
-.marca::after{content:"";position:absolute;left:0;right:0;top:.72em;height:.18em;background:var(--kraft);opacity:.9;z-index:-1}
+.marca::after{content:"";position:absolute;left:0;width:2.6em;top:.70em;height:.16em;background:var(--kraft);opacity:.95;z-index:-1}
 .marca small{display:block;font:500 11px/1 Inter,sans-serif;letter-spacing:.14em;color:#9AA3A7;padding-top:4px}
 .gopack{display:inline-flex;align-items:center;gap:5px;font:600 11px/1 Inter,sans-serif;letter-spacing:.1em;
   color:var(--kraft);border:1px solid var(--kraft);border-radius:999px;padding:4px 9px}
@@ -227,8 +227,8 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
    MODO_DEMO = false → usa SUPABASE_URL y SUPABASE_ANON.
    ======================================================= */
 const MODO_DEMO     = false;   // pon true solo si quieres volver a los datos de prueba
-const SUPABASE_URL  = "https://TU-PROYECTO.supabase.co";
-const SUPABASE_ANON = "TU_ANON_KEY";
+const SUPABASE_URL  = "https://veurujzglniffgdxytbq.supabase.co";
+const SUPABASE_ANON = "sb_publishable__ip1JGoR4JG0EzPGPwMp1w_xEeEhv1h";
 const BUCKET = "izma";
 
 /* ===== mapa de México por estados (SVG, licencia MIT — @svg-maps/mexico) ===== */
@@ -3135,7 +3135,7 @@ window.addEventListener("unhandledrejection", e => fallo((e.reason && e.reason.m
     $("#claves-demo").innerHTML =
       '<div class="mensaje kraft" style="margin-top:14px"><b>Datos de prueba</b> · PIN 1234<br>' +
       "admin · vendedor · maria · jose</div>";
-  } else if (SUPABASE_URL.indexOf("TU-PROYECTO") >= 0 || SUPABASE_ANON.indexOf("TU_ANON") >= 0) {
+  } else if (SUPABASE_ANON.indexOf("TU_ANON") >= 0 || SUPABASE_ANON.length < 20) {
     $("#claves-demo").innerHTML =
       '<div class="mensaje rojo" style="margin-top:14px"><b>Falta conectar Supabase</b><br>' +
       "Pon SUPABASE_URL y SUPABASE_ANON al inicio del archivo.</div>";
