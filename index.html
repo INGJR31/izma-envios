@@ -304,7 +304,7 @@ function aviso(texto, tipo = "") {
 }
 function hoja(html) { $("#hoja").innerHTML = html; $("#capa").classList.add("abierta"); }
 function cerrarHoja() { $("#capa").classList.remove("abierta"); $("#hoja").innerHTML = ""; }
-$("#capa").addEventListener("click", e => { if (e.target.id === "capa") cerrarHoja(); });
+$("#capa").addEventListener("click", e => { if (e.target.id === "capa" && !E.forzandoPin) cerrarHoja(); });
 function verImagen(url) {
   hoja('<img src="' + esc(url) + '" alt="" style="width:100%;border-radius:10px;margin-bottom:12px">' +
     '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
@@ -413,7 +413,37 @@ async function rpc(fn, args = {}) {
 
 /* Cuenta del dueño técnico: no aparece en listas, mapa, actividad ni bitácora
    para los demás admins. Solo él se ve a sí mismo. */
-const USUARIO_OCULTO = "jaredrod";
+const USUARIO_OCULTO = "soporte";
+
+/* PINs temporales: si un admin entra con el PIN que le dimos, la app lo obliga
+   a cambiarlo antes de usar nada. Al cambiarlo, el hash deja de coincidir y ya no pide. */
+const PIN_TEMPORAL = {
+  izma: "9a8b8f5389b656297dc67ff98b4adb5e677655ec35f59103ee74eeb7d98839ea",
+  isis: "55c5949efa6303dc6e02f5198b094bd338b767d69ef5ff9e5afd7984a9ee5fbb"
+};
+function forzarCambioPin() {
+  E.forzandoPin = true;
+  hoja('<h2>Cambia tu PIN para continuar</h2>' +
+    '<p class="tenue" style="margin-top:0">Por seguridad, este PIN es temporal. Elige uno nuevo de al menos 6 dígitos que solo tú sepas.</p>' +
+    '<label class="campo"><span>PIN nuevo</span><input id="fp1" type="password" inputmode="numeric" autocomplete="new-password"></label>' +
+    '<label class="campo"><span>Repite el PIN nuevo</span><input id="fp2" type="password" inputmode="numeric" autocomplete="new-password"></label>' +
+    '<button class="btn lleno verde" id="fp-ok">Guardar y entrar</button>');
+  $("#fp-ok").onclick = async () => {
+    const a = $("#fp1").value.trim(), b = $("#fp2").value.trim();
+    if (a.length < 6) return aviso("El PIN necesita al menos 6 dígitos", "mal");
+    if (a !== b) return aviso("Los PIN no coinciden", "mal");
+    if (PIN_TEMPORAL[E.yo.usuario.toLowerCase()] === await hashPin(E.yo.usuario, a))
+      return aviso("Elige un PIN distinto al temporal", "mal");
+    try {
+      const r = await rpc("cambiar_pin", { p_token: E.token,
+        p_pin_hash_nuevo: await hashPin(E.yo.usuario, a),
+        p_pin_hash_actual: PIN_TEMPORAL[E.yo.usuario.toLowerCase()] });
+      if (r && r.ok === false) throw new Error(r.motivo);
+      E.forzandoPin = false; cerrarHoja();
+      aviso("PIN actualizado. ¡Bienvenido!", "bien");
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+}
 const IDS_OCULTOS = new Set();
 function ocultarDueno(fn, dato) {
   if (fn === "login" || fn === "sesion") return dato;
@@ -1786,12 +1816,14 @@ $("#form-entrar").addEventListener("submit", async e => {
   try {
     const d = new FormData(e.target);
     const usuario = d.get("usuario").trim();
-    const res = await rpc("login", { p_usuario: usuario, p_pin_hash: await hashPin(usuario, d.get("pin")) });
+    const hash = await hashPin(usuario, d.get("pin"));
+    const res = await rpc("login", { p_usuario: usuario, p_pin_hash: hash });
     if (!res.ok) throw new Error(res.motivo);
     almacen.set("izma_token", res.token);
     E.token = res.token; E.yo = res.usuario; E.config = res.config;
     e.target.reset();
-    arrancarApp();
+    if (PIN_TEMPORAL[usuario.toLowerCase()] === hash) { arrancarApp(); forzarCambioPin(); }
+    else arrancarApp();
   } catch (err) { aviso(err.message, "mal"); }
   b.disabled = false; b.textContent = "Entrar";
 });
@@ -1814,6 +1846,11 @@ $("#form-solicitar").addEventListener("submit", async e => {
 });
 
 /* ===================== 7. navegación ===================== */
+/* Espacios o tiendas donde vive la mercancía. Pueden cambiar los nombres
+   o agregar más aquí; el campo "Espacio" al subir y el filtro de Productos
+   los toman de esta lista. */
+const ESPACIOS = ["Bodega", "Local", "Tienda 1", "Tienda 2"];
+
 const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"],
             ["almacen", "Mi bodega"], ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
@@ -1860,7 +1897,7 @@ document.addEventListener("click", async e => {
     salirLocal();
     return;
   }
-  if (e.target.closest("[data-cerrar]")) cerrarHoja();
+  if (e.target.closest("[data-cerrar]") && !E.forzandoPin) cerrarHoja();
   const img = e.target.closest("[data-ver]");
   if (img) verImagen(img.dataset.ver);
 });
@@ -2363,7 +2400,8 @@ VISTAS.publicar = async () => {
         '<label class="campo"><span>Categoría</span><input id="cat" list="cats" placeholder="Ropa, calzado, juguetes…">' +
           '<datalist id="cats"><option>Ropa</option><option>Calzado</option><option>Juguetes</option><option>Hogar</option>' +
           '<option>Herramienta</option><option>Electrónica</option><option>Bebé</option><option>Varios</option></datalist></label>' +
-        '<label class="campo"><span>Tienda o bodega</span><input id="origen" placeholder="Ej. bodega Otay"></label></div>' +
+        '<label class="campo"><span>Espacio o tienda</span><input id="origen" list="espacios" placeholder="Elige o escribe">' +
+          '<datalist id="espacios">' + ESPACIOS.map(x => "<option>" + x + "</option>").join("") + '</datalist></label></div>' +
       '<button class="btn lleno kraft" id="publicar">Publicar en la bodega</button></div>';
 
   $("#archivos").onchange = async e => {
@@ -2665,9 +2703,12 @@ function enlazarEditar(lista) {
       '<div class="dos">' +
         '<label class="campo"><span>Precio</span><input id="e-precio" inputmode="decimal" value="' + (p.precio || 0) + '"></label>' +
         '<label class="campo"><span>Piezas totales</span><input id="e-cant" inputmode="numeric" value="' + (p.cantidad || 0) + '"></label></div>' +
-      '<label class="campo"><span>Estado</span><select id="e-estado">' +
-        '<option value="activo"' + (p.estado !== "oculto" ? " selected" : "") + ">Visible en la bodega</option>" +
-        '<option value="oculto"' + (p.estado === "oculto" ? " selected" : "") + ">Oculto</option></select></label>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>Estado</span><select id="e-estado">' +
+          '<option value="activo"' + (p.estado !== "oculto" ? " selected" : "") + ">Visible en la bodega</option>" +
+          '<option value="oculto"' + (p.estado === "oculto" ? " selected" : "") + ">Oculto</option></select></label>" +
+        '<label class="campo"><span>Espacio o tienda</span><input id="e-origen" list="espacios-ed" value="' + esc(p.origen || "") + '">' +
+          '<datalist id="espacios-ed">' + ESPACIOS.map(x => "<option>" + x + "</option>").join("") + "</datalist></label></div>" +
       '<div class="mensaje info">Tiene ' + (p.apartados || 0) + " apartadas y " + (p.vendidos || 0) + " vendidas.</div>" +
       '<button class="btn lleno" id="e-guardar">Guardar</button>' +
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
@@ -2676,7 +2717,8 @@ function enlazarEditar(lista) {
         const r = await rpc("editar_producto", {
           p_token: E.token, p_id: p.id,
           p_datos: { titulo: $("#e-titulo").value, precio: Number($("#e-precio").value || 0),
-                     cantidad: parseInt($("#e-cant").value || "0", 10), estado: $("#e-estado").value }
+                     cantidad: parseInt($("#e-cant").value || "0", 10), estado: $("#e-estado").value,
+                     origen: $("#e-origen").value }
         });
         if (!r.ok) throw new Error(r.motivo);
         cerrarHoja(); aviso("Producto actualizado", "bien"); pintar();
@@ -2959,14 +3001,24 @@ VISTAS.pedidos = async () => {
 VISTAS.productos = async () => {
   const arch = !!E.datos.verArchivados;
   const d = await rpc("admin_productos", { p_token: E.token, p_busqueda: E.busqueda, p_archivados: arch });
+  const norm = s => String(s || "").trim().toLowerCase();
+  const espacioSel = E.datos.espacio || "";
+  // Espacios de la lista + cualquier otro que ya tengan los productos
+  const presentes = [...new Set(d.items.map(p => (p.origen || "").trim()).filter(Boolean))];
+  const chips = [...ESPACIOS];
+  presentes.forEach(x => { if (!chips.some(c => norm(c) === norm(x))) chips.push(x); });
+  const items = espacioSel ? d.items.filter(p => norm(p.origen) === norm(espacioSel)) : d.items;
   $("#vista").innerHTML =
     '<div class="buscador"><input id="q" placeholder="Buscar producto…" value="' + esc(E.busqueda) +
       '"><button class="btn" id="bq">Buscar</button>' +
       '<button class="btn kraft" data-vista="publicar">Subir</button></div>' +
     '<div class="filtros"><button data-arch="0" aria-current="' + (!arch) + '">En bodega</button>' +
       '<button data-arch="1" aria-current="' + arch + '">Archivados de ventas cerradas</button></div>' +
+    '<div class="filtros"><button data-esp="" aria-current="' + (!espacioSel) + '">Todos los espacios</button>' +
+      chips.map(x => '<button data-esp="' + esc(x) + '" aria-current="' + (norm(espacioSel) === norm(x)) + '">' + esc(x) +
+        " (" + d.items.filter(p => norm(p.origen) === norm(x)).length + ")</button>").join("") + "</div>" +
     (arch ? '<div class="mensaje info">Mercancía de jornadas ya cerradas. Queda solo de historial, los clientes no la ven.</div>' : "") +
-    '<div class="rejilla">' + (d.items.map(p => {
+    '<div class="rejilla">' + (items.map(p => {
       const m = (p.media || [])[0];
       return '<article class="pieza"><div class="lienzo">' +
         (m ? (m.tipo === "video"
@@ -2985,6 +3037,7 @@ VISTAS.productos = async () => {
   $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
   $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
   $$("[data-arch]").forEach(b => b.onclick = () => { E.datos.verArchivados = b.dataset.arch === "1"; pintar(); });
+  $$("[data-esp]").forEach(b => b.onclick = () => { E.datos.espacio = b.dataset.esp; pintar(); });
   enlazarEditar(d.items);
 };
 
@@ -3044,7 +3097,10 @@ function enlazarMapa(m) {
   if ($("[data-limpiar-edo]")) $("[data-limpiar-edo]").onclick = () => { E.datos.estadoMapa = ""; pintar(); };
 }
 
-const FILTROS_USUARIOS = [["cliente", "Clientes"], ["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"], ["eliminados", "Eliminados"]];
+const ELIMINAR_ACTIVO = false;   // ← ponlo en true cuando subas eliminar_usuario.sql a Supabase
+const FILTROS_USUARIOS = ELIMINAR_ACTIVO
+  ? [["cliente", "Clientes"], ["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"], ["eliminados", "Eliminados"]]
+  : [["cliente", "Clientes"], ["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"]];
 
 function eliminarUsuario(ds) {
   const saldo = Number(ds.saldo || 0);
@@ -3127,7 +3183,7 @@ VISTAS.usuarios = async () => {
           '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
           '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
             (u.estado === "activo" ? "Suspender" : "Reactivar") + "</button>" +
-          (u.id !== E.yo.id ? '<button class="btn claro chico peligro" data-eliminar="' + u.id + '" data-nombre="' + esc(u.nombre) +
+          (ELIMINAR_ACTIVO && u.id !== E.yo.id ? '<button class="btn claro chico peligro" data-eliminar="' + u.id + '" data-nombre="' + esc(u.nombre) +
             '" data-usuario="' + esc(u.usuario) + '" data-saldo="' + (u.saldo || 0) + '">Eliminar</button>' : "") +
           "</div></div>";
     }).join("");
