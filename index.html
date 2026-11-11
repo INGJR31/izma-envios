@@ -1846,10 +1846,14 @@ $("#form-solicitar").addEventListener("submit", async e => {
 });
 
 /* ===================== 7. navegación ===================== */
-/* Espacios o tiendas donde vive la mercancía. Pueden cambiar los nombres
-   o agregar más aquí; el campo "Espacio" al subir y el filtro de Productos
-   los toman de esta lista. */
-const ESPACIOS = ["Bodega", "Local", "Tienda 1", "Tienda 2"];
+/* Espacios o tiendas donde vive la mercancía. Esta es la lista por defecto;
+   las admins pueden cambiarla desde Ajustes y queda guardada para todos. */
+const ESPACIOS_DEFAULT = ["Bodega", "Local", "Tienda 1", "Tienda 2"];
+/* Lista vigente: la que guardaron en Ajustes, o la de por defecto. */
+function ESPACIOS_LISTA() {
+  const g = E.config && E.config.espacios;
+  return Array.isArray(g) && g.length ? g : ESPACIOS_DEFAULT;
+}
 
 const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"],
@@ -2401,7 +2405,7 @@ VISTAS.publicar = async () => {
           '<datalist id="cats"><option>Ropa</option><option>Calzado</option><option>Juguetes</option><option>Hogar</option>' +
           '<option>Herramienta</option><option>Electrónica</option><option>Bebé</option><option>Varios</option></datalist></label>' +
         '<label class="campo"><span>Espacio o tienda</span><input id="origen" list="espacios" placeholder="Elige o escribe">' +
-          '<datalist id="espacios">' + ESPACIOS.map(x => "<option>" + x + "</option>").join("") + '</datalist></label></div>' +
+          '<datalist id="espacios">' + ESPACIOS_LISTA().map(x => "<option>" + x + "</option>").join("") + '</datalist></label></div>' +
       '<button class="btn lleno kraft" id="publicar">Publicar en la bodega</button></div>';
 
   $("#archivos").onchange = async e => {
@@ -2708,7 +2712,7 @@ function enlazarEditar(lista) {
           '<option value="activo"' + (p.estado !== "oculto" ? " selected" : "") + ">Visible en la bodega</option>" +
           '<option value="oculto"' + (p.estado === "oculto" ? " selected" : "") + ">Oculto</option></select></label>" +
         '<label class="campo"><span>Espacio o tienda</span><input id="e-origen" list="espacios-ed" value="' + esc(p.origen || "") + '">' +
-          '<datalist id="espacios-ed">' + ESPACIOS.map(x => "<option>" + x + "</option>").join("") + "</datalist></label></div>" +
+          '<datalist id="espacios-ed">' + ESPACIOS_LISTA().map(x => "<option>" + x + "</option>").join("") + "</datalist></label></div>" +
       '<div class="mensaje info">Tiene ' + (p.apartados || 0) + " apartadas y " + (p.vendidos || 0) + " vendidas.</div>" +
       '<button class="btn lleno" id="e-guardar">Guardar</button>' +
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
@@ -3005,7 +3009,7 @@ VISTAS.productos = async () => {
   const espacioSel = E.datos.espacio || "";
   // Espacios de la lista + cualquier otro que ya tengan los productos
   const presentes = [...new Set(d.items.map(p => (p.origen || "").trim()).filter(Boolean))];
-  const chips = [...ESPACIOS];
+  const chips = [...ESPACIOS_LISTA()];
   presentes.forEach(x => { if (!chips.some(c => norm(c) === norm(x))) chips.push(x); });
   const items = espacioSel ? d.items.filter(p => norm(p.origen) === norm(espacioSel)) : d.items;
   $("#vista").innerHTML =
@@ -4188,6 +4192,10 @@ VISTAS.ajustes = async () => {
       '<div class="dos">' +
         '<label class="campo"><span>CLABE</span><input id="c-clabe" value="' + esc(c.banco_clabe || "") + '"></label>' +
         '<label class="campo"><span>Tarjeta</span><input id="c-tarjeta" value="' + esc(c.banco_tarjeta || "") + '"></label></div></div>' +
+    '<div class="tarjeta"><h2>Espacios o tiendas</h2>' +
+      '<p class="tenue" style="margin-top:0">Escribe un espacio por renglón. Son las tiendas donde se guarda la mercancía; aparecen al subir productos y como filtro en Productos.</p>' +
+      '<label class="campo"><span>Tus espacios</span><textarea id="c-espacios" rows="4" placeholder="Bodega&#10;Local&#10;Tienda 1&#10;Tienda 2">' + esc(ESPACIOS_LISTA().join("\n")) + "</textarea></label>" +
+      '<button class="btn lleno verde" id="c-esp-guardar">Guardar espacios</button></div>' +
     '<div class="tarjeta"><h2>Contacto y avisos</h2>' +
       '<label class="campo"><span>WhatsApp de pedidos</span><input id="c-wa" value="' + esc(c.whatsapp_pedidos || "") + '" placeholder="52664…"></label>' +
       '<label class="campo"><span>Aviso en la bodega (lo ven los clientes)</span><textarea id="c-aviso">' + esc(c.aviso || "") + "</textarea></label>" +
@@ -4215,6 +4223,19 @@ VISTAS.ajustes = async () => {
       if (!r.ok) throw new Error(r.motivo);
       E.config = r.config;
       aviso("Ajustes guardados", "bien");
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+  $("#c-esp-guardar").onclick = async () => {
+    const lista = $("#c-espacios").value.split("\n").map(s => s.trim()).filter(Boolean);
+    const vistos = new Set(); const limpia = [];
+    lista.forEach(x => { const k = x.toLowerCase(); if (!vistos.has(k)) { vistos.add(k); limpia.push(x); } });
+    if (!limpia.length) return aviso("Deja al menos un espacio", "mal");
+    try {
+      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { espacios: limpia } });
+      if (!r.ok) throw new Error(r.motivo);
+      E.config = r.config;
+      if (!Array.isArray(E.config.espacios)) E.config.espacios = limpia;
+      aviso("Espacios guardados", "bien");
     } catch (err) { aviso(err.message, "mal"); }
   };
   if ($("#c-reset")) $("#c-reset").onclick = async () => {
