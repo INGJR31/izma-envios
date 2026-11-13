@@ -1855,6 +1855,22 @@ function ESPACIOS_LISTA() {
   return Array.isArray(g) && g.length ? g : ESPACIOS_DEFAULT;
 }
 
+/* ===== Área LOCAL: venta privada que solo ven clientes autorizados ===== */
+function ESPACIO_LOCAL() { return (E.config && E.config.espacio_local) || "Local"; }
+function esProductoLocal(p) {
+  return String(p.origen || "").trim().toLowerCase() === ESPACIO_LOCAL().trim().toLowerCase();
+}
+function listaAccesoLocal() {
+  const l = E.config && E.config.local_acceso;
+  return Array.isArray(l) ? l : [];
+}
+function clienteVeLocal(id) { return listaAccesoLocal().includes(id); }
+function yoVeoLocal() {
+  if (!E.yo) return false;
+  if (E.yo.rol !== "cliente") return true;      // admin y vendedor ven todo en sus áreas
+  return clienteVeLocal(E.yo.id);
+}
+
 const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"],
             ["almacen", "Mi bodega"], ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
@@ -1884,7 +1900,10 @@ function pintarNav() {
     ? '<span class="bolsa num ' + (E.yo.saldo < 0 ? "deuda" : "") + '">' +
       (E.yo.saldo < 0 ? "debes " + dinero(-E.yo.saldo) : dinero(E.yo.saldo)) + "</span>" : "";
   $("#quien").innerHTML = "<b>" + esc(E.yo.nombre) + "</b>" + esc(E.yo.usuario) + " · " + rolTexto + bolsa;
-  $("#nav").innerHTML = MENUS[E.yo.rol].map(([id, t]) => {
+  let menu = MENUS[E.yo.rol].slice();
+  // El menú LOCAL solo aparece para clientes autorizados
+  if (E.yo.rol === "cliente" && yoVeoLocal()) menu.splice(1, 0, ["local", ESPACIO_LOCAL().toUpperCase()]);
+  $("#nav").innerHTML = menu.map(([id, t]) => {
     let globo = "";
     if (id === "carrito" && E.pendientes) globo = '<i class="globo num">' + E.pendientes + "</i>";
     if (id === "solicitudes" && E.datos.pendSol) globo = '<i class="globo num">' + E.datos.pendSol + "</i>";
@@ -1938,6 +1957,8 @@ const VISTAS = {};
 VISTAS.bodega = async () => {
   const d = await rpc("catalogo", { p_token: E.token, p_busqueda: E.busqueda, p_categoria: E.categoria });
   E.config = d.config;
+  // La mercancía del área LOCAL no se muestra en la bodega normal
+  d.items = (d.items || []).filter(p => !esProductoLocal(p));
   if (E.yo.rol === "cliente") {
     E.yo.saldo = d.saldo;
     const car = await rpc("carrito", { p_token: E.token });
@@ -1988,6 +2009,51 @@ VISTAS.bodega = async () => {
         (p.disponible ? p.disponible + " en existencia" : "Agotado") + "</span></p>" +
       (p.descripcion ? "<p>" + esc(p.descripcion) + "</p>" : "") +
       '<p class="tenue">Subió: ' + esc(p.vendedor) + (p.origen ? " · " + esc(p.origen) : "") + "</p>" +
+      '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
+  });
+};
+
+/* Área LOCAL: venta privada, solo para clientes autorizados */
+VISTAS.local = async () => {
+  const d = await rpc("catalogo", { p_token: E.token, p_busqueda: E.busqueda, p_categoria: "" });
+  E.config = d.config;
+  if (!yoVeoLocal()) {
+    $("#vista").innerHTML = '<div class="tarjeta"><div class="mensaje info">Esta área no está disponible para tu cuenta.</div></div>';
+    pintarNav(); return;
+  }
+  if (E.yo.rol === "cliente") {
+    E.yo.saldo = d.saldo;
+    const car = await rpc("carrito", { p_token: E.token });
+    E.pendientes = car.items.length;
+  }
+  pintarNav();
+  const items = (d.items || []).filter(esProductoLocal);
+  $("#vista").innerHTML =
+    '<div class="tarjeta" style="background:#0B2A18;color:#fff;border:0">' +
+      '<h2 style="margin:0;color:#fff">' + esc(ESPACIO_LOCAL().toUpperCase()) + "</h2>" +
+      '<p class="tenue" style="margin:4px 0 0;color:#CFE6D8">Venta exclusiva para clientes seleccionados.</p></div>' +
+    '<div class="buscador"><input id="q" placeholder="Buscar en ' + esc(ESPACIO_LOCAL()) + '…" value="' + esc(E.busqueda) +
+      '"><button class="btn" id="bq">Buscar</button></div>' +
+    '<div class="rejilla">' + items.map(pieza).join("") + "</div>" +
+    (items.length ? "" : '<div class="vacio"><h3>Todavía no hay nada aquí</h3><p>Pídele al administrador que suba mercancía al espacio ' + esc(ESPACIO_LOCAL()) + ".</p></div>");
+  $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
+  $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
+  $$("[data-apartar]").forEach(b => b.onclick = () => apartarPieza(b.dataset.apartar, b.closest(".pieza")));
+  $$(".stepper button").forEach(b => b.onclick = () => {
+    const i = b.parentElement.querySelector("input");
+    const max = +i.max || 1;
+    i.value = Math.min(max, Math.max(1, (+i.value || 1) + (+b.dataset.paso)));
+  });
+  $$("[data-galeria]").forEach(el => el.onclick = () => {
+    const p = items.find(x => x.id === el.dataset.galeria);
+    hoja("<h2>" + esc(p.titulo) + "</h2>" +
+      (p.media || []).map(m => m.tipo === "video"
+        ? '<video src="' + esc(m.url) + '" controls playsinline style="width:100%;border-radius:10px;margin-bottom:8px"></video>'
+        : '<img src="' + esc(m.url) + '" alt="" style="width:100%;border-radius:10px;margin-bottom:8px">').join("") +
+      '<p class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
+        '<span class="sello ' + (p.disponible ? "verde" : "rojo") + ' num">' +
+        (p.disponible ? p.disponible + " en existencia" : "Agotado") + "</span></p>" +
+      (p.descripcion ? "<p>" + esc(p.descripcion) + "</p>" : "") +
       '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
   });
 };
@@ -3172,6 +3238,8 @@ VISTAS.usuarios = async () => {
               '<button class="btn kraft chico" data-gasto="' + u.id + '" data-nombre="' + esc(u.nombre) + '">Cobrar gasto</button>' +
               '<button class="btn claro chico" data-limite="' + u.id + '" data-valor="' + (u.limite_credito || 0) + '">Crédito</button>' : "") +
           (u.rol === "cliente" ? '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' : "") +
+          (u.rol === "cliente" ? '<button class="btn ' + (clienteVeLocal(u.id) ? "verde" : "claro") + ' chico" data-local="' + u.id +
+            '" data-nombre="' + esc(u.nombre) + '">' + (clienteVeLocal(u.id) ? "✓ Ve " + esc(ESPACIO_LOCAL().toUpperCase()) : "Dar " + esc(ESPACIO_LOCAL().toUpperCase())) + "</button>" : "") +
           '<button class="btn claro chico" data-editar-u="' + u.id + '">Editar</button>' +
           '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
           '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
@@ -3182,6 +3250,20 @@ VISTAS.usuarios = async () => {
     }).join("");
 
   if (mapa) enlazarMapa(mapa);
+  $$("[data-local]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.local;
+    const actual = listaAccesoLocal();
+    const nueva = actual.includes(id) ? actual.filter(x => x !== id) : [...actual, id];
+    try {
+      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { local_acceso: nueva } });
+      if (!r.ok) throw new Error(r.motivo);
+      E.config = r.config;
+      if (!Array.isArray(E.config.local_acceso)) E.config.local_acceso = nueva;
+      aviso(nueva.includes(id) ? b.dataset.nombre + " ya puede ver " + ESPACIO_LOCAL().toUpperCase()
+                               : "Se le quitó " + ESPACIO_LOCAL().toUpperCase() + " a " + b.dataset.nombre, "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
   $$("[data-r]").forEach(b => b.onclick = () => { E.datos.filtroRol = b.dataset.r; E.datos.estadoMapa = ""; pintar(); });
   $$("[data-saldo]").forEach(b => b.onclick = () => {
     hoja("<h2>Ajustar saldo de " + esc(b.dataset.nombre) + "</h2>" +
