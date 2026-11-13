@@ -3005,24 +3005,14 @@ VISTAS.pedidos = async () => {
 VISTAS.productos = async () => {
   const arch = !!E.datos.verArchivados;
   const d = await rpc("admin_productos", { p_token: E.token, p_busqueda: E.busqueda, p_archivados: arch });
-  const norm = s => String(s || "").trim().toLowerCase();
-  const espacioSel = E.datos.espacio || "";
-  // Espacios de la lista + cualquier otro que ya tengan los productos
-  const presentes = [...new Set(d.items.map(p => (p.origen || "").trim()).filter(Boolean))];
-  const chips = [...ESPACIOS_LISTA()];
-  presentes.forEach(x => { if (!chips.some(c => norm(c) === norm(x))) chips.push(x); });
-  const items = espacioSel ? d.items.filter(p => norm(p.origen) === norm(espacioSel)) : d.items;
   $("#vista").innerHTML =
     '<div class="buscador"><input id="q" placeholder="Buscar producto…" value="' + esc(E.busqueda) +
       '"><button class="btn" id="bq">Buscar</button>' +
       '<button class="btn kraft" data-vista="publicar">Subir</button></div>' +
     '<div class="filtros"><button data-arch="0" aria-current="' + (!arch) + '">En bodega</button>' +
       '<button data-arch="1" aria-current="' + arch + '">Archivados de ventas cerradas</button></div>' +
-    '<div class="filtros"><button data-esp="" aria-current="' + (!espacioSel) + '">Todos los espacios</button>' +
-      chips.map(x => '<button data-esp="' + esc(x) + '" aria-current="' + (norm(espacioSel) === norm(x)) + '">' + esc(x) +
-        " (" + d.items.filter(p => norm(p.origen) === norm(x)).length + ")</button>").join("") + "</div>" +
     (arch ? '<div class="mensaje info">Mercancía de jornadas ya cerradas. Queda solo de historial, los clientes no la ven.</div>' : "") +
-    '<div class="rejilla">' + (items.map(p => {
+    '<div class="rejilla">' + (d.items.map(p => {
       const m = (p.media || [])[0];
       return '<article class="pieza"><div class="lienzo">' +
         (m ? (m.tipo === "video"
@@ -3041,7 +3031,6 @@ VISTAS.productos = async () => {
   $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
   $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
   $$("[data-arch]").forEach(b => b.onclick = () => { E.datos.verArchivados = b.dataset.arch === "1"; pintar(); });
-  $$("[data-esp]").forEach(b => b.onclick = () => { E.datos.espacio = b.dataset.esp; pintar(); });
   enlazarEditar(d.items);
 };
 
@@ -3880,10 +3869,42 @@ function detalleBodega(b, cli) {
     "</div></div>";
 }
 
+function bloqueEspacios(items) {
+  const norm = s => String(s || "").trim().toLowerCase();
+  const sel = E.datos.espacioBodega || "";
+  const presentes = [...new Set((items || []).map(p => (p.origen || "").trim()).filter(Boolean))];
+  const chips = [...ESPACIOS_LISTA()];
+  presentes.forEach(x => { if (!chips.some(c => norm(c) === norm(x))) chips.push(x); });
+  const lista = sel ? (items || []).filter(p => norm(p.origen) === norm(sel)) : (items || []);
+
+  return '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">Mercancía por espacio</h2>' +
+      '<button class="btn kraft chico" data-vista="publicar">Subir</button></div>' +
+    '<p class="tenue" style="margin:4px 0 8px">Tu inventario por tienda. Toca un espacio para ver solo esa mercancía; con Editar la mueves de tienda.</p>' +
+    '<div class="filtros"><button data-espb="" aria-current="' + (!sel) + '">Todos (' + (items || []).length + ")</button>" +
+      chips.map(x => '<button data-espb="' + esc(x) + '" aria-current="' + (norm(sel) === norm(x)) + '">' + esc(x) +
+        " (" + (items || []).filter(p => norm(p.origen) === norm(x)).length + ")</button>").join("") + "</div>" +
+    '<div class="rejilla" style="margin-top:10px">' + (lista.map(p => {
+      const m = (p.media || [])[0];
+      return '<article class="pieza"><div class="lienzo">' +
+        (m ? (m.tipo === "video"
+          ? '<video src="' + esc(m.url) + '" muted playsinline preload="metadata"></video>'
+          : '<img src="' + esc(m.url) + '" alt="" loading="lazy">') : "") +
+        '<span class="cinta">' + esc(p.estado) + "</span></div>" +
+        '<div class="cuerpo"><div class="titulo">' + esc(p.titulo) + "</div>" +
+          '<div class="tenue">' + esc(p.origen || "—") + " · subió " + esc(p.vendedor) + "</div>" +
+          '<div class="fila envolver">' +
+            '<span class="sello verde num">' + p.disponible + " en existencia</span>" +
+            '<span class="sello num">' + p.vendidos + " vendidas</span></div>" +
+          '<div class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
+            '<button class="btn claro chico" data-editar="' + p.id + '">Editar</button></div></div></article>';
+    }).join("") || '<div class="vacio"><h3>Sin mercancía en este espacio</h3></div>') + "</div></div>";
+}
+
 async function bodegaAdmin() {
   const verCliente = E.datos.bodegaCliente || "";
   const d = await rpc("admin_bodega", { p_token: E.token, p_usuario: verCliente || null });
   const cajas = await rpc("admin_cajas", { p_token: E.token, p_estado: E.datos.filtroCaja || "" });
+  const prod = await rpc("admin_productos", { p_token: E.token, p_busqueda: "", p_archivados: false });
   const filtros = [["", "Todas"], ["abierta", "Armando"], ["solicitada", "Piden envío"],
                    ["cerrada", "Empacadas"], ["enviada", "Enviadas"]];
 
@@ -3893,6 +3914,8 @@ async function bodegaAdmin() {
       '<div class="mosaico"><div class="cifra">' + dinero(d.total.valor) + "</div><span>valor en bodega</span></div>" +
       '<div class="mosaico ' + (d.total.cajas ? "alerta" : "") + '"><div class="cifra">' + d.total.cajas +
         "</div><span>cajas que piden envío</span></div></div>" +
+
+    bloqueEspacios(prod.items) +
 
     (d.detalle ? detalleBodega(d.detalle, d.clientes.find(c => c.id === verCliente) || {}) : "") +
 
@@ -3927,6 +3950,8 @@ async function bodegaAdmin() {
         "</div></div>";
       }).join("") : '<p class="tenue" style="margin:0">Nada en este filtro.</p>') + "</div>";
 
+  $$("[data-espb]").forEach(b => b.onclick = () => { E.datos.espacioBodega = b.dataset.espb; pintar(); });
+  enlazarEditar(prod.items);
   $$("[data-vercli]").forEach(b => b.onclick = () => { E.datos.bodegaCliente = b.dataset.vercli; pintar(); });
   $$("[data-mov]").forEach(b => b.onclick = async () => {
     try {
