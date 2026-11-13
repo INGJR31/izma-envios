@@ -1674,42 +1674,6 @@ const LOCAL = {
     copia.generado_en = ahora();
     return { ok: true, datos: copia };
   },
-  local_vender({ p_token, p_items }) {
-    const u = exige(p_token, ["vendedor", "admin"]);
-    const lineas = Array.isArray(p_items) ? p_items : [];
-    if (!lineas.length) return { ok: false, motivo: "No hay productos en la venta" };
-    const detalle = []; let total = 0, piezas = 0;
-    for (const it of lineas) {
-      const p = BD.productos.find(x => x.id === it.producto_id);
-      if (!p) return { ok: false, motivo: "Un producto ya no existe" };
-      const cant = Math.max(1, parseInt(it.cantidad, 10) || 1);
-      if (p.disponible < cant) return { ok: false, motivo: "No hay suficientes piezas de " + p.titulo };
-      detalle.push({ producto_id: p.id, titulo: p.titulo, precio: p.precio, cantidad: cant });
-      total += p.precio * cant; piezas += cant;
-    }
-    detalle.forEach(x => {
-      const p = BD.productos.find(y => y.id === x.producto_id);
-      p.disponible -= x.cantidad; p.vendidos = (p.vendidos || 0) + x.cantidad;
-      if (p.disponible <= 0 && p.estado === "activo") p.estado = "agotado";
-    });
-    BD.folio_local = (BD.folio_local || 0) + 1;
-    const venta = {
-      id: uid(), folio: "LB" + String(BD.folio_local).padStart(4, "0"),
-      vendedora_id: u.id, vendedora: u.nombre, detalle, piezas, total: redondea(total), creado_en: ahora()
-    };
-    if (!BD.ventas_local) BD.ventas_local = [];
-    BD.ventas_local.push(venta);
-    bitacora(u, "registró venta del local", "tienda_local", venta.folio, { total: venta.total, piezas });
-    guardarBD();
-    return { ok: true, folio: venta.folio, total: venta.total };
-  },
-  ventas_local({ p_token }) {
-    const u = exige(p_token, ["vendedor", "admin"]);
-    const items = (BD.ventas_local || [])
-      .filter(v => u.rol === "admin" || v.vendedora_id === u.id)
-      .sort((a, b) => b.creado_en.localeCompare(a.creado_en));
-    return { ok: true, items };
-  },
   admin_usuarios({ p_token, p_rol }) {
     exige(p_token, ["admin"]);
     const items = BD.usuarios.filter(u => !p_rol || u.rol === p_rol)
@@ -1846,7 +1810,7 @@ const LOCAL = {
     const f = new Date();
     const folio = "LB" + String(f.getFullYear()).slice(2) + String(f.getMonth() + 1).padStart(2, "0") +
                   String(f.getDate()).padStart(2, "0") + String(BD.folio_local).padStart(3, "0");
-    const venta = { id: uid(), folio, vendedora_id: u.id, vendedora: u.nombre, detalle,
+    const venta = { id: uid(), folio, vendedora_id: u.id, vendedora: u.nombre, detalle, estado: "activa",
       piezas: detalle.reduce((a, x) => a + x.cantidad, 0), total: redondea(total), creado_en: ahora() };
     BD.ventas_local.push(venta);
     bitacora(u, "registró venta de tienda", "tienda_local", folio, { total: venta.total, piezas: venta.piezas });
@@ -1858,6 +1822,33 @@ const LOCAL = {
     const todas = (BD.ventas_local || []).slice().sort((a, b) => b.creado_en.localeCompare(a.creado_en));
     const items = u.rol === "admin" ? todas : todas.filter(v => v.vendedora_id === u.id);
     return { ok: true, items };
+  },
+  local_cancelar_venta({ p_token, p_venta, p_motivo }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    const v = (BD.ventas_local || []).find(x => x.id === p_venta);
+    if (!v) return { ok: false, motivo: "Venta no encontrada" };
+    if (u.rol === "vendedor" && v.vendedora_id !== u.id) return { ok: false, motivo: "Esa venta no es tuya" };
+    if (v.estado === "cancelada") return { ok: false, motivo: "Esa venta ya está cancelada" };
+    if (!String(p_motivo || "").trim()) return { ok: false, motivo: "Falta el motivo" };
+    (v.detalle || []).forEach(x => {
+      const p = BD.productos.find(z => z.id === x.producto_id);
+      if (p) { p.disponible += x.cantidad; p.vendidos = Math.max(0, (p.vendidos || 0) - x.cantidad);
+        if (p.disponible > 0 && p.estado === "agotado") p.estado = "activo"; }
+    });
+    v.estado = "cancelada"; v.motivo_cancela = String(p_motivo).trim();
+    v.cancelada_por = u.nombre; v.cancelada_en = ahora();
+    bitacora(u, "canceló venta del local", "tienda_local", v.folio, { motivo: v.motivo_cancela, total: v.total });
+    guardarBD();
+    return { ok: true };
+  },
+  eliminar_producto({ p_token, p_id }) {
+    const u = exige(p_token, ["admin"]);
+    const p = BD.productos.find(x => x.id === p_id);
+    if (!p) return { ok: false, motivo: "No existe" };
+    p.estado = "archivado";   // sale del catálogo y del inventario; se conserva el historial
+    bitacora(u, "eliminó producto del local", "producto", p.titulo, null);
+    guardarBD();
+    return { ok: true };
   }
 };
 
@@ -2220,18 +2211,43 @@ VISTAS.pos_ventas = async () => {
   const d = await rpc("ventas_local", { p_token: E.token });
   const items = (d && d.items) || [];
   const hoy = new Date().toDateString();
-  const delDia = items.filter(v => new Date(v.creado_en).toDateString() === hoy);
+  const vigentes = items.filter(v => v.estado !== "cancelada");
+  const delDia = vigentes.filter(v => new Date(v.creado_en).toDateString() === hoy);
   const totHoy = delDia.reduce((a, v) => a + Number(v.total || 0), 0);
   $("#vista").innerHTML =
     '<div class="tablero">' +
       '<div class="mosaico"><div class="cifra">' + delDia.length + "</div><span>ventas hoy</span></div>" +
       '<div class="mosaico"><div class="cifra">' + dinero(totHoy) + "</div><span>cobrado hoy</span></div></div>" +
     '<div class="tarjeta"><h2>Mis ventas del local</h2>' +
-      (items.length ? items.map(v => '<div class="renglon"><div class="crece"><b>' + esc(v.folio || "venta") + "</b>" +
-        '<div class="tenue">' + fecha(v.creado_en) + " · " + (v.piezas || 0) + " piezas</div>" +
-        '<div class="tenue">' + (v.detalle || []).map(x => x.cantidad + "× " + esc(x.titulo)).join(", ") + "</div></div>" +
-        '<div class="monto num">' + dinero(v.total) + "</div></div>").join("")
+      (items.length ? items.map(v => {
+        const cancel = v.estado === "cancelada";
+        return '<div class="renglon"' + (cancel ? ' style="opacity:.6"' : "") + '><div class="crece"><b>' + esc(v.folio || "venta") + "</b>" +
+          (cancel ? ' <span class="sello rojo">cancelada</span>' : "") +
+          '<div class="tenue">' + fecha(v.creado_en) + " · " + (v.piezas || 0) + " piezas</div>" +
+          '<div class="tenue">' + (v.detalle || []).map(x => x.cantidad + "× " + esc(x.titulo)).join(", ") + "</div>" +
+          (cancel ? '<div class="tenue" style="color:var(--sello)">Motivo: ' + esc(v.motivo_cancela || "") + "</div>" : "") + "</div>" +
+          '<div style="text-align:right"><div class="monto num"' + (cancel ? ' style="text-decoration:line-through"' : "") + ">" + dinero(v.total) + "</div>" +
+          (!cancel ? '<button class="btn claro chico peligro" data-cancela="' + v.id + '" data-folio="' + esc(v.folio || "") + '">Cancelar</button>' : "") +
+          "</div></div>";
+      }).join("")
         : '<p class="tenue" style="margin:0">Todavía no registras ventas.</p>') + "</div>";
+
+  $$("[data-cancela]").forEach(b => b.onclick = () => {
+    hoja("<h2>Cancelar venta " + esc(b.dataset.folio) + "</h2>" +
+      '<p class="tenue" style="margin-top:0">La mercancía regresa a existencias y <b>se le avisa a administración</b> con el motivo.</p>' +
+      '<label class="campo"><span>Motivo (obligatorio)</span><textarea id="cv-motivo" placeholder="Ej. el cliente se arrepintió, error al cobrar…"></textarea></label>' +
+      '<button class="btn lleno peligro" id="cv-ok">Cancelar la venta</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>');
+    $("#cv-ok").onclick = async () => {
+      const motivo = $("#cv-motivo").value.trim();
+      if (motivo.length < 4) return aviso("Escribe el motivo", "mal");
+      try {
+        const r = await rpc("local_cancelar_venta", { p_token: E.token, p_venta: b.dataset.cancela, p_motivo: motivo });
+        if (r && r.ok === false) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Venta cancelada. Administración fue notificada.", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
 };
 
 /* ===== Sección aparte para admin y soporte: La Bodeguita ===== */
@@ -2240,21 +2256,29 @@ VISTAS.tienda_local = async () => {
   const vent = await rpc("ventas_local", { p_token: E.token });
   const prod = await rpc("admin_productos", { p_token: E.token, p_busqueda: "", p_archivados: false });
   const ventas = (vent && vent.items) || [];
-  const inventario = (prod.items || []).filter(esProductoLocal);
+  const inventario = (prod.items || []).filter(esProductoLocal);   // admin_productos ya excluye archivados
   const hoy = new Date().toDateString();
-  const delDia = ventas.filter(v => new Date(v.creado_en).toDateString() === hoy);
+  const vigentes = ventas.filter(v => v.estado !== "cancelada");
+  const delDia = vigentes.filter(v => new Date(v.creado_en).toDateString() === hoy);
   const totHoy = delDia.reduce((a, v) => a + Number(v.total || 0), 0);
   const piezasHoy = delDia.reduce((a, v) => a + Number(v.piezas || 0), 0);
-  const totMes = ventas.filter(v => new Date(v.creado_en).getMonth() === new Date().getMonth()
+  const totMes = vigentes.filter(v => new Date(v.creado_en).getMonth() === new Date().getMonth()
       && new Date(v.creado_en).getFullYear() === new Date().getFullYear())
     .reduce((a, v) => a + Number(v.total || 0), 0);
   const valInv = inventario.reduce((a, p) => a + Number(p.precio) * Number(p.disponible), 0);
   const piezasInv = inventario.reduce((a, p) => a + Number(p.disponible), 0);
+  const canceladas = ventas.filter(v => v.estado === "cancelada").length;
 
-  const ventaRow = v => '<div class="renglon"><div class="crece"><b>' + esc(v.folio || "venta") + "</b>" +
-    '<div class="tenue">' + fecha(v.creado_en) + " · " + (v.vendedora || "—") + " · " + (v.piezas || 0) + " piezas</div>" +
-    '<div class="tenue">' + (v.detalle || []).map(x => x.cantidad + "× " + esc(x.titulo)).join(", ") + "</div></div>" +
-    '<div class="monto num">' + dinero(v.total) + "</div></div>";
+  const ventaRow = v => {
+    const cancel = v.estado === "cancelada";
+    return '<div class="renglon"' + (cancel ? ' style="opacity:.7"' : "") + '><div class="crece"><b>' + esc(v.folio || "venta") + "</b>" +
+      (cancel ? ' <span class="sello rojo">cancelada</span>' : "") +
+      '<div class="tenue">' + fecha(v.creado_en) + " · " + (v.vendedora || "—") + " · " + (v.piezas || 0) + " piezas</div>" +
+      '<div class="tenue">' + (v.detalle || []).map(x => x.cantidad + "× " + esc(x.titulo)).join(", ") + "</div>" +
+      (cancel ? '<div class="tenue" style="color:var(--sello)">Cancelada por ' + esc(v.cancelada_por || v.vendedora || "—") +
+        ": " + esc(v.motivo_cancela || "") + "</div>" : "") + "</div>" +
+      '<div class="monto num"' + (cancel ? ' style="text-decoration:line-through"' : "") + ">" + dinero(v.total) + "</div></div>";
+  };
 
   const tabs = [["hoy", "Ventas del día"], ["inventario", "Inventario"], ["movimiento", "Todo el movimiento"]];
 
@@ -2269,18 +2293,38 @@ VISTAS.tienda_local = async () => {
     '<div class="filtros">' + tabs.map(t => '<button data-tl="' + t[0] + '" aria-current="' + (tab === t[0]) + '">' + t[1] + "</button>").join("") + "</div>" +
     (tab === "inventario"
       ? '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">Inventario · ' + inventario.length + " productos</h2>" +
-          '<span class="num tenue">Valor: ' + dinero(valInv) + "</span></div>" +
+          '<button class="btn kraft chico" id="tl-subir">Subir producto</button></div>' +
+        '<p class="tenue" style="margin:4px 0 8px">Valor en existencia: ' + dinero(valInv) + ". Solo administración puede subir, editar o eliminar.</p>" +
         (inventario.length ? inventario.map(p => '<div class="renglon"><div class="crece"><b>' + esc(p.titulo) + "</b>" +
-          '<div class="tenue">' + dinero(p.precio) + " · vendidas " + (p.vendidos || 0) + "</div></div>" +
+          '<div class="tenue">' + dinero(p.precio) + " · " + p.disponible + " disp. · vendidas " + (p.vendidos || 0) + "</div>" +
+          '<div class="fila envolver" style="margin-top:4px">' +
+            '<button class="btn claro chico" data-editar="' + p.id + '">Editar</button>' +
+            '<button class="btn claro chico peligro" data-elim-prod="' + p.id + '" data-nombre="' + esc(p.titulo) + '">Eliminar</button></div></div>' +
           '<div style="text-align:right"><span class="sello ' + (p.disponible > 0 ? "verde" : "rojo") + ' num">' + p.disponible + " disp.</span></div></div>").join("")
-          : '<p class="tenue" style="margin:0">Sin mercancía en ' + esc(ESPACIO_LOCAL()) + ".</p>") + "</div>"
+          : '<p class="tenue" style="margin:0">Sin mercancía en ' + esc(ESPACIO_LOCAL()) + ". Toca “Subir producto”.</p>") + "</div>"
       : tab === "movimiento"
-      ? '<div class="tarjeta"><h2>Todas las ventas</h2>' +
+      ? '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">Todas las ventas</h2>' +
+          (canceladas ? '<span class="sello rojo">' + canceladas + " canceladas</span>" : "") + "</div>" +
         (ventas.length ? ventas.map(ventaRow).join("") : '<p class="tenue" style="margin:0">Sin ventas todavía.</p>') + "</div>"
       : '<div class="tarjeta"><h2>Ventas de hoy · ' + delDia.length + "</h2>" +
         (delDia.length ? delDia.map(ventaRow).join("") : '<p class="tenue" style="margin:0">Hoy no hay ventas todavía.</p>') + "</div>");
 
   $$("[data-tl]").forEach(b => b.onclick = () => { E.datos.tlTab = b.dataset.tl; pintar(); });
+  if ($("#tl-subir")) $("#tl-subir").onclick = () => { E.espacioSugerido = ESPACIO_LOCAL(); ir("publicar"); };
+  enlazarEditar(inventario);
+  $$("[data-elim-prod]").forEach(b => b.onclick = () => {
+    hoja("<h2>Eliminar “" + esc(b.dataset.nombre) + "”</h2>" +
+      '<p class="tenue" style="margin-top:0">Saldrá del inventario de ' + esc(NEGOCIO_LOCAL()) + ". Las ventas que ya tuvo se conservan.</p>" +
+      '<button class="btn lleno peligro" id="ep-ok">Sí, eliminar</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#ep-ok").onclick = async () => {
+      try {
+        const r = await rpc("eliminar_producto", { p_token: E.token, p_id: b.dataset.elimProd });
+        if (r && r.ok === false) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Producto eliminado", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
+  });
 };
 
 function pieza(p) {
@@ -2678,6 +2722,7 @@ VISTAS.cuenta = async () => {
 /* ===================== 11. subir producto (vendedor e IZMA) ===================== */
 VISTAS.publicar = async () => {
   E.media = [];
+  const sugerido = E.espacioSugerido || ""; E.espacioSugerido = "";
   $("#vista").innerHTML =
     '<div class="tarjeta"><h2>Subir producto a la bodega</h2>' +
       '<p class="tenue" style="margin-top:0">Foto o video, precio de venta y cuántas piezas hay en existencia.</p>' +
@@ -2695,7 +2740,7 @@ VISTAS.publicar = async () => {
         '<label class="campo"><span>Categoría</span><input id="cat" list="cats" placeholder="Ropa, calzado, juguetes…">' +
           '<datalist id="cats"><option>Ropa</option><option>Calzado</option><option>Juguetes</option><option>Hogar</option>' +
           '<option>Herramienta</option><option>Electrónica</option><option>Bebé</option><option>Varios</option></datalist></label>' +
-        '<label class="campo"><span>Espacio o tienda</span><input id="origen" list="espacios" placeholder="Elige o escribe">' +
+        '<label class="campo"><span>Espacio o tienda</span><input id="origen" list="espacios" placeholder="Elige o escribe" value="' + esc(sugerido) + '">' +
           '<datalist id="espacios">' + ESPACIOS_LISTA().map(x => "<option>" + x + "</option>").join("") + '</datalist></label></div>' +
       '<button class="btn lleno kraft" id="publicar">Publicar en la bodega</button></div>';
 
