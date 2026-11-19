@@ -266,6 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div class="dos">
         <label class="campo"><span>Ciudad *</span><input name="ciudad" required></label>
         <label class="campo"><span>Estado *</span><select name="estado_mx" id="sel-estado" required></select></label>
+        <label class="campo"><span>Código Postal *</span><input name="cp" inputmode="numeric" maxlength="5" placeholder="5 dígitos" required></label>
         <label class="campo"><span>Tipo de cliente</span>
           <select name="tipo"><option value="local">Local (recojo en bodega)</option>
           <option value="foraneo">Foráneo (por paquetería)</option></select></label>
@@ -415,6 +416,67 @@ const almacen = {
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch {} }
 };
+
+/* ===== Notificaciones con sonido (mientras la app está abierta) ===== */
+function notifActiva() { return almacen.get("izma_notif") === "1"; }
+let _audioCtx = null;
+function beep() {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === "suspended") _audioCtx.resume();
+    const o = _audioCtx.createOscillator(), g = _audioCtx.createGain();
+    o.connect(g); g.connect(_audioCtx.destination);
+    o.type = "sine"; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, _audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.35, _audioCtx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, _audioCtx.currentTime + 0.35);
+    o.start(); o.stop(_audioCtx.currentTime + 0.36);
+    o.frequency.setValueAtTime(1180, _audioCtx.currentTime + 0.12);
+  } catch { }
+}
+async function activarNotificaciones(on) {
+  almacen.set("izma_notif", on ? "1" : "0");
+  if (on) {
+    try { if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission(); } catch { }
+    beep();   // desbloquea el audio y confirma que suena
+  }
+}
+function notificar(texto) {
+  if (!notifActiva()) return;
+  beep();
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("IZMA ENVÍOS", { body: texto, icon: "", tag: "izma" });
+    }
+  } catch { }
+}
+
+/* ===== Entrada con huella / Face ID (desbloqueo en este aparato) ===== */
+function bioDisponible() { return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create); }
+function bioRegistrada() { return !!almacen.get("izma_bio"); }
+function b64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function deB64(s) { return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+async function bioRegistrar(usuario, token) {
+  const reto = crypto.getRandomValues(new Uint8Array(32));
+  const cred = await navigator.credentials.create({ publicKey: {
+    challenge: reto, rp: { name: "IZMA ENVIOS" },
+    user: { id: new TextEncoder().encode(usuario).slice(0, 64), name: usuario, displayName: usuario },
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+    timeout: 60000, attestation: "none"
+  } });
+  almacen.set("izma_bio", JSON.stringify({ usuario, id: b64(cred.rawId), token }));
+}
+async function bioVerificar() {
+  const b = JSON.parse(almacen.get("izma_bio") || "null");
+  if (!b) return null;
+  const reto = crypto.getRandomValues(new Uint8Array(32));
+  await navigator.credentials.get({ publicKey: {
+    challenge: reto, allowCredentials: [{ type: "public-key", id: deB64(b.id) }],
+    userVerification: "required", timeout: 60000
+  } });
+  return b;   // si no lanzó, la biometría pasó
+}
 
 /* ===================== 3. capa de datos ===================== */
 async function rpc(fn, args = {}) {
@@ -1968,9 +2030,29 @@ const E = {
 };
 function salirLocal() {
   almacen.del("izma_token");
+  almacen.del("izma_bio");   // al salir, se quita el desbloqueo por huella de este aparato
   E.token = ""; E.yo = null;
   $("#app").hidden = true;
   $("#acceso").style.display = "flex";
+}
+function desbloqueoBio() {
+  return new Promise(resolve => {
+    const ov = document.createElement("div");
+    ov.id = "bio-lock";
+    ov.style.cssText = "position:fixed;inset:0;z-index:200;background:var(--tinta);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center";
+    ov.innerHTML = '<div class="logo-grande" style="width:220px"></div>' +
+      '<h2 style="color:#fff;margin:0">Desbloquea para entrar</h2>' +
+      '<button class="btn lleno verde" id="bio-go" style="max-width:300px">🔐 Usar huella / Face ID</button>' +
+      '<button class="btn lleno claro" id="bio-pin" style="max-width:300px">Entrar con PIN</button>';
+    document.body.appendChild(ov);
+    const intentar = async () => {
+      try { await bioVerificar(); ov.remove(); arrancarApp(); resolve(); }
+      catch { aviso("No se reconoció. Intenta otra vez o usa tu PIN.", "mal"); }
+    };
+    ov.querySelector("#bio-go").onclick = intentar;
+    ov.querySelector("#bio-pin").onclick = () => { ov.remove(); salirLocal(); resolve(); };
+    setTimeout(intentar, 350);   // intenta solo al abrir
+  });
 }
 
 /* ===================== 6. acceso ===================== */
@@ -2040,6 +2122,8 @@ $("#form-solicitar").addEventListener("submit", async e => {
   if (!String(d.get("ciudad") || "").trim()) faltan.push("ciudad");
   if (!String(d.get("estado_mx") || "").trim()) faltan.push("estado");
   if (!String(d.get("referencia") || "").trim()) faltan.push("recomendación");
+  const cp = String(d.get("cp") || "").trim();
+  if (!/^[0-9]{5}$/.test(cp)) faltan.push("código postal (5 dígitos)");
   if (d.get("tipo") === "foraneo") {
     if (!String(d.get("paqueteria") || "").trim()) faltan.push("paquetería");
     if (!String(d.get("direccion") || "").trim()) faltan.push("dirección");
@@ -2050,10 +2134,11 @@ $("#form-solicitar").addEventListener("submit", async e => {
   b.disabled = true; b.textContent = "Enviando…";
   try {
     const foto = await subir(FOTO_SOLICITUD);
+    const dir = (d.get("direccion") || "").trim();
     const res = await rpc("crear_solicitud", {
       p_nombre: d.get("nombre"), p_telefono: d.get("telefono"), p_ciudad: d.get("ciudad") || "",
       p_tipo: d.get("tipo"), p_estado_mx: d.get("estado_mx") || "", p_paqueteria: d.get("paqueteria") || "",
-      p_direccion: d.get("direccion") || "", p_referencia: d.get("referencia") || "", p_foto: foto.url
+      p_direccion: (dir ? dir + " · " : "") + "CP:" + cp, p_referencia: d.get("referencia") || "", p_foto: foto.url
     });
     if (!res.ok) throw new Error(res.motivo);
     e.target.reset(); FOTO_SOLICITUD = null;
@@ -2201,6 +2286,15 @@ function leerFormTallas(suf) {
   });
   return out;
 }
+
+/* ===== Zona extendida: el admin la marca por cliente (en su perfil) ===== */
+function cpDeTexto(t) {
+  const s = String(t || "");
+  const m = s.match(/CP[:\s]*([0-9]{5})/i) || s.match(/\b([0-9]{5})\b/);
+  return m ? m[1] : "";
+}
+function listaZonaExt() { const l = E.config && E.config.zona_ext; return Array.isArray(l) ? l : []; }
+function clienteZonaExt(id) { return listaZonaExt().includes(id); }
 
 /* ===== Área LOCAL: venta privada que solo ven clientes autorizados ===== */
 function ESPACIO_LOCAL() { return (E.config && E.config.espacio_local) || "Local"; }
@@ -3052,7 +3146,27 @@ VISTAS.cuenta = async () => {
     '<div class="tarjeta"><h2>Cambiar mi PIN</h2>' +
       '<label class="campo"><span>PIN nuevo</span><input id="pin1" type="password" inputmode="numeric"></label>' +
       '<label class="campo"><span>Repítelo</span><input id="pin2" type="password" inputmode="numeric"></label>' +
-      '<button class="btn claro" id="cambiar">Cambiar PIN</button></div>';
+      '<button class="btn claro" id="cambiar">Cambiar PIN</button></div>' +
+    '<div class="tarjeta"><h2>Avisos y seguridad</h2>' +
+      '<label class="interruptor" style="margin-bottom:6px"><input type="checkbox" id="sw-notif"' + (notifActiva() ? " checked" : "") + '><span class="pista"></span><span>🔔 Avisos con sonido</span></label>' +
+      '<p class="tenue" style="margin:0 0 12px">Suena y te avisa cuando llega algo (pedido, depósito, venta…) mientras la app esté abierta.</p>' +
+      (bioDisponible()
+        ? '<label class="interruptor"><input type="checkbox" id="sw-bio"' + (bioRegistrada() ? " checked" : "") + '><span class="pista"></span><span>🔐 Entrar con huella / Face ID</span></label>' +
+          '<p class="tenue" style="margin:6px 0 0">Al abrir la app te pedirá tu huella o rostro en este aparato. Siempre puedes entrar con tu PIN.</p>'
+        : '<p class="tenue" style="margin:0">Tu aparato o navegador no permite huella / Face ID aquí.</p>') +
+    "</div>";
+  const swN = $("#sw-notif");
+  if (swN) swN.onchange = async () => {
+    await activarNotificaciones(swN.checked);
+    aviso(swN.checked ? "Avisos con sonido activados" : "Avisos desactivados", "bien");
+  };
+  const swB = $("#sw-bio");
+  if (swB) swB.onchange = async () => {
+    if (swB.checked) {
+      try { await bioRegistrar(E.yo.usuario, E.token); aviso("Listo. Ya puedes entrar con huella / Face ID", "bien"); }
+      catch (err) { swB.checked = false; aviso("No se pudo activar: " + (err.message || "cancelado"), "mal"); }
+    } else { almacen.del("izma_bio"); aviso("Huella / Face ID desactivado", "bien"); }
+  };
   $("#guardar").onclick = async () => {
     try {
       const r = await rpc("actualizar_mis_datos", {
@@ -3548,6 +3662,7 @@ VISTAS.resumen = async () => {
 function detalleSolicitud(s) {
   if (!s) return;
   const foraneo = s.tipo_cliente === "foraneo";
+  const cp = cpDeTexto(s.direccion) || cpDeTexto(s.referencia);
   const lugar = [s.ciudad, s.estado_mx].filter(Boolean).join(", ") || "No lo puso";
   const mapsQ = encodeURIComponent([s.direccion, s.ciudad, s.estado_mx, "México"].filter(Boolean).join(", "));
   const dato = (etq, val) => '<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--linea)">' +
@@ -3559,9 +3674,10 @@ function detalleSolicitud(s) {
       'onclick="window.open(this.src)"><div class="tenue" style="margin-top:4px">Foto de rostro (toca para ampliar)</div></div>'
       : '<div class="mensaje rojo" style="margin-top:0">⚠ Esta solicitud no trae foto de rostro.</div>') +
     '<div class="mensaje ' + (foraneo ? "info" : "verde") + '" style="margin-top:0">' +
-      (foraneo ? "📦 <b>ZONA EXTENDIDA</b> · envío foráneo. Revisa costo y paquetería antes de autorizar."
-               : "🏠 <b>ZONA LOCAL</b> · entrega o recolección local.") + "</div>" +
+      (foraneo ? "📦 <b>Envío foráneo</b> · CP " + esc(cp || "—") + ". Al autorizar, marca en su perfil si es zona extendida."
+               : "🏠 <b>Zona local</b> · entrega o recolección local.") + "</div>" +
     '<div style="margin:6px 0 2px">' +
+      dato("Código Postal", cp || "No lo puso") +
       dato("Nombre", s.nombre) +
       dato("WhatsApp", s.telefono) +
       dato("Tipo", foraneo ? "Foráneo (zona extendida)" : "Local") +
@@ -3995,7 +4111,8 @@ async function pantallaUsuarios(area) {
   function tarjetaUsuario(u) {
       const debe = u.saldo < 0;
       return '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(u.nombre) + "</h3>" +
-        '<span class="sello ' + (u.estado === "activo" ? "verde" : "rojo") + '">' + esc(u.estado) + "</span></div>" +
+        '<div class="fila" style="gap:6px">' + (u.rol === "cliente" && clienteZonaExt(u.id) ? '<span class="sello kraft">📦 Zona extendida</span>' : "") +
+        '<span class="sello ' + (u.estado === "activo" ? "verde" : "rojo") + '">' + esc(u.estado) + "</span></div></div>" +
         '<p class="tenue" style="margin:4px 0">' + esc(u.usuario) + " · " + esc(u.rol) +
           (u.tipo_cliente ? " " + esc(u.tipo_cliente) : "") +
           (u.telefono ? " · " + esc(u.telefono) : "") + (u.ciudad ? " · " + esc(u.ciudad) : "") + "</p>" +
@@ -4014,6 +4131,8 @@ async function pantallaUsuarios(area) {
           (u.rol === "cliente" ? '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' : "") +
           (u.rol === "cliente" ? '<button class="btn ' + (clienteVeLocal(u.id) ? "verde" : "claro") + ' chico" data-local="' + u.id +
             '" data-nombre="' + esc(u.nombre) + '">' + (clienteVeLocal(u.id) ? "✓ Ve " + esc(ESPACIO_LOCAL().toUpperCase()) : "Dar " + esc(ESPACIO_LOCAL().toUpperCase())) + "</button>" : "") +
+          (u.rol === "cliente" ? '<button class="btn ' + (clienteZonaExt(u.id) ? "kraft" : "claro") + ' chico" data-zonaext="' + u.id +
+            '" data-nombre="' + esc(u.nombre) + '">' + (clienteZonaExt(u.id) ? "📦 Zona extendida" : "Marcar zona extendida") + "</button>" : "") +
           '<button class="btn claro chico" data-editar-u="' + u.id + '">Editar</button>' +
           '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
           '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
@@ -4038,6 +4157,18 @@ async function pantallaUsuarios(area) {
       if (!Array.isArray(E.config.local_acceso)) E.config.local_acceso = nueva;
       aviso(nueva.includes(id) ? b.dataset.nombre + " ya puede ver " + ESPACIO_LOCAL().toUpperCase()
                                : "Se le quitó " + ESPACIO_LOCAL().toUpperCase() + " a " + b.dataset.nombre, "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-zonaext]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.zonaext;
+    const actual = listaZonaExt();
+    const nueva = actual.includes(id) ? actual.filter(x => x !== id) : [...actual, id];
+    try {
+      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { zona_ext: nueva } });
+      if (!r.ok) throw new Error(r.motivo);
+      E.config = r.config; if (!Array.isArray(E.config.zona_ext)) E.config.zona_ext = nueva;
+      aviso(nueva.includes(id) ? b.dataset.nombre + ": marcado como ZONA EXTENDIDA" : b.dataset.nombre + ": zona normal", "bien");
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
   });
@@ -5196,7 +5327,7 @@ setInterval(async () => {
     if (d.nuevas && d.nuevas > (E.datos.avisadas || 0)) {
       E.datos.avisadas = d.nuevas;
       const u = d.items[0];
-      if (u) aviso(u.actor_usuario + " " + u.accion + (u.ref ? " · " + u.ref : ""));
+      if (u) { const t = u.actor_usuario + " " + u.accion + (u.ref ? " · " + u.ref : ""); aviso(t); notificar(t); }
     }
   } catch {}
 }, 30000);
@@ -5230,7 +5361,8 @@ window.addEventListener("unhandledrejection", e => fallo((e.reason && e.reason.m
     const s = await rpc("sesion", { p_token: E.token });
     if (!s.ok) return salirLocal();
     E.yo = s.usuario; E.config = s.config;
-    arrancarApp();
+    if (bioRegistrada() && bioDisponible()) await desbloqueoBio();
+    else arrancarApp();
   } catch { salirLocal(); }
   } catch (err) { fallo(err.message); }
 })();
