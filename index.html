@@ -228,15 +228,20 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
       <label class="campo"><span>WhatsApp</span><input name="telefono" inputmode="tel" required></label>
       <div class="dos">
-        <label class="campo"><span>Ciudad</span><input name="ciudad"></label>
-        <label class="campo"><span>Estado</span><select name="estado_mx" id="sel-estado"></select></label>
+        <label class="campo"><span>Ciudad *</span><input name="ciudad" required></label>
+        <label class="campo"><span>Estado *</span><select name="estado_mx" id="sel-estado" required></select></label>
         <label class="campo"><span>Tipo de cliente</span>
           <select name="tipo"><option value="local">Local (recojo en bodega)</option>
           <option value="foraneo">Foráneo (por paquetería)</option></select></label>
       </div>
       <label class="campo" data-solo-foraneo hidden><span>Paquetería de tu preferencia</span><input name="paqueteria" placeholder="Estafeta, Castores, Tufesa…"></label>
       <label class="campo" data-solo-foraneo hidden><span>Dirección de envío</span><textarea name="direccion"></textarea></label>
-      <label class="campo"><span>¿Quién te recomendó o cómo nos encontraste?</span><input name="referencia"></label>
+      <label class="campo"><span>¿Quién te recomendó o cómo nos encontraste? *</span><input name="referencia" required></label>
+      <label class="campo" style="margin-bottom:4px"><span>Foto de tu rostro * <small style="font-weight:400;color:#7C899C">(que se vea tu cara, no paisajes)</small></span></label>
+      <label class="suelta" id="sol-foto-box"><b>📷 Agregar foto de tu rostro</b>
+        <small style="display:block;margin-top:4px;color:#7C899C">Toca para tomar o subir una selfie donde se vea bien tu cara.</small>
+        <input type="file" id="sol-foto" accept="image/*" capture="user" hidden></label>
+      <div id="sol-foto-estado"></div>
       <button class="btn lleno kraft" type="submit">Enviar solicitud</button>
     </form>
   </div>
@@ -482,6 +487,47 @@ const pesa = b => b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.round(b 
 
 /* Sube fotos y video. Las fotos se comprimen; el video va tal cual.
    avance(porcentaje) se llama mientras sube, para la barra. */
+/* ===== Verificación de rostro (para la foto de perfil del registro) ===== */
+function cargarScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error("No se pudo cargar el verificador de rostro"));
+    document.head.appendChild(s);
+  });
+}
+let _blaze = null;
+async function cargarBlaze() {
+  if (_blaze) return _blaze;
+  if (!window.tf) await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.22.0/tf.min.js");
+  if (!window.blazeface) await cargarScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js");
+  _blaze = await blazeface.load();
+  return _blaze;
+}
+// Devuelve {ok, sinVerificar?} — ok=false si NO se ve una cara
+async function verificarRostro(file) {
+  if (MODO_DEMO) return { ok: !/paisaje|landscape/i.test(file.name || "") };
+  const img = new Image();
+  img.src = await leerDataURL(file);
+  await new Promise((r, j) => { img.onload = r; img.onerror = () => j(new Error("No se pudo leer la imagen")); });
+  // 1) Detector nativo del navegador (rápido, sin descargar nada)
+  try {
+    if ("FaceDetector" in window) {
+      const fd = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const caras = await fd.detect(img);
+      return { ok: caras.length > 0 };
+    }
+  } catch (e) { /* sigue al plan B */ }
+  // 2) BlazeFace (se descarga solo la primera vez)
+  try {
+    const modelo = await cargarBlaze();
+    const preds = await modelo.estimateFaces(img, false);
+    return { ok: preds.length > 0 };
+  } catch (e) {
+    // No se pudo cargar el verificador: deja pasar, pero el admin revisa la foto
+    return { ok: true, sinVerificar: true };
+  }
+}
+
 async function subir(file, avance) {
   const esVideo = (file.type || "").startsWith("video/");
   if (MODO_DEMO) {
@@ -769,7 +815,7 @@ const LOCAL = {
       id: uid(), nombre: a.p_nombre.trim(), telefono: String(a.p_telefono).trim(), ciudad: a.p_ciudad || "",
       tipo_cliente: a.p_tipo === "foraneo" ? "foraneo" : "local", paqueteria: a.p_paqueteria || "",
       estado_mx: a.p_estado_mx || "",
-      direccion: a.p_direccion || "", referencia: a.p_referencia || "", estado: "pendiente",
+      direccion: a.p_direccion || "", referencia: a.p_referencia || "", foto: a.p_foto || "", estado: "pendiente",
       motivo: "", usuario_dado: "", creada_en: ahora(), resuelta_en: null
     });
     guardarBD();
@@ -1918,19 +1964,64 @@ $("#form-entrar").addEventListener("submit", async e => {
   } catch (err) { aviso(err.message, "mal"); }
   b.disabled = false; b.textContent = "Entrar";
 });
+/* Foto de rostro del registro: al elegirla, se verifica que se vea una cara */
+let FOTO_SOLICITUD = null;   // { file, urlLista } cuando ya pasó la verificación
+(function () {
+  const inp = $("#sol-foto"), box = $("#sol-foto-box"), est = $("#sol-foto-estado");
+  if (!inp) return;
+  inp.onchange = async () => {
+    const file = inp.files && inp.files[0];
+    if (!file) return;
+    FOTO_SOLICITUD = null;
+    est.innerHTML = '<div class="mensaje info">Revisando que se vea tu rostro…</div>';
+    try {
+      const chico = await comprimir(file, 900, 0.8);
+      const r = await verificarRostro(chico);
+      if (!r.ok) {
+        est.innerHTML = '<div class="mensaje rojo">No detectamos un rostro en esa foto. Sube una selfie donde se vea bien tu cara (no paisajes ni objetos).</div>';
+        box.querySelector("b").textContent = "📷 Volver a intentar";
+        return;
+      }
+      FOTO_SOLICITUD = chico;
+      const prev = URL.createObjectURL(chico);
+      est.innerHTML = '<div class="mensaje verde">✓ Rostro detectado' + (r.sinVerificar ? " (se revisará al autorizar)" : "") + '.</div>' +
+        '<img src="' + prev + '" alt="" style="width:92px;height:92px;object-fit:cover;border-radius:50%;margin-top:6px;border:3px solid var(--verde)">';
+      box.querySelector("b").textContent = "📷 Cambiar foto";
+    } catch (err) {
+      est.innerHTML = '<div class="mensaje rojo">' + esc(err.message) + "</div>";
+    }
+  };
+})();
+
 $("#form-solicitar").addEventListener("submit", async e => {
   e.preventDefault();
   const b = e.target.querySelector("button[type=submit]");
+  const d = new FormData(e.target);
+  // Validación: todos los campos obligatorios
+  const faltan = [];
+  if (!String(d.get("nombre") || "").trim()) faltan.push("nombre");
+  if (!String(d.get("telefono") || "").trim()) faltan.push("WhatsApp");
+  if (!String(d.get("ciudad") || "").trim()) faltan.push("ciudad");
+  if (!String(d.get("estado_mx") || "").trim()) faltan.push("estado");
+  if (!String(d.get("referencia") || "").trim()) faltan.push("recomendación");
+  if (d.get("tipo") === "foraneo") {
+    if (!String(d.get("paqueteria") || "").trim()) faltan.push("paquetería");
+    if (!String(d.get("direccion") || "").trim()) faltan.push("dirección");
+  }
+  if (faltan.length) return aviso("Faltan datos: " + faltan.join(", "), "mal");
+  if (!FOTO_SOLICITUD) return aviso("Sube una foto donde se vea tu rostro", "mal");
+
   b.disabled = true; b.textContent = "Enviando…";
   try {
-    const d = new FormData(e.target);
+    const foto = await subir(FOTO_SOLICITUD);
     const res = await rpc("crear_solicitud", {
       p_nombre: d.get("nombre"), p_telefono: d.get("telefono"), p_ciudad: d.get("ciudad") || "",
       p_tipo: d.get("tipo"), p_estado_mx: d.get("estado_mx") || "", p_paqueteria: d.get("paqueteria") || "",
-      p_direccion: d.get("direccion") || "", p_referencia: d.get("referencia") || ""
+      p_direccion: d.get("direccion") || "", p_referencia: d.get("referencia") || "", p_foto: foto.url
     });
     if (!res.ok) throw new Error(res.motivo);
-    e.target.reset();
+    e.target.reset(); FOTO_SOLICITUD = null;
+    if ($("#sol-foto-estado")) $("#sol-foto-estado").innerHTML = "";
     hoja('<h2>Solicitud enviada</h2><p>IZMA revisa tu información y te manda tu usuario y PIN por WhatsApp. Normalmente es el mismo día.</p><button class="btn lleno" data-cerrar>Listo</button>');
   } catch (err) { aviso(err.message, "mal"); }
   b.disabled = false; b.textContent = "Enviar solicitud";
@@ -3137,6 +3228,10 @@ function detalleSolicitud(s) {
     '<span class="tenue" style="flex:none">' + etq + '</span>' +
     '<span style="text-align:right;font-weight:600;max-width:62%">' + (val ? esc(val) : "—") + "</span></div>";
   hoja("<h2>Solicitud de " + esc(s.nombre) + "</h2>" +
+    (s.foto ? '<div style="text-align:center;margin-bottom:10px"><img src="' + esc(s.foto) +
+      '" alt="rostro" style="width:120px;height:120px;object-fit:cover;border-radius:50%;border:3px solid var(--verde)" ' +
+      'onclick="window.open(this.src)"><div class="tenue" style="margin-top:4px">Foto de rostro (toca para ampliar)</div></div>'
+      : '<div class="mensaje rojo" style="margin-top:0">⚠ Esta solicitud no trae foto de rostro.</div>') +
     '<div class="mensaje ' + (foraneo ? "info" : "verde") + '" style="margin-top:0">' +
       (foraneo ? "📦 <b>ZONA EXTENDIDA</b> · envío foráneo. Revisa costo y paquetería antes de autorizar."
                : "🏠 <b>ZONA LOCAL</b> · entrega o recolección local.") + "</div>" +
@@ -3167,7 +3262,10 @@ VISTAS.solicitudes = async () => {
     return;
   }
   $("#vista").innerHTML = d.items.map(s =>
-    '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(s.nombre) + "</h3>" +
+    '<div class="tarjeta"><div class="fila entre envolver"><div class="fila" style="gap:10px;align-items:center">' +
+      (s.foto ? '<img src="' + esc(s.foto) + '" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:50%;border:2px solid var(--linea)">'
+              : '<span style="width:44px;height:44px;border-radius:50%;background:#EEE;display:inline-flex;align-items:center;justify-content:center">👤</span>') +
+      '<h3 style="margin:0">' + esc(s.nombre) + "</h3></div>" +
       '<span class="sello ' + (s.tipo_cliente === "foraneo" ? "kraft" : "verde") + '">' +
       (s.tipo_cliente === "foraneo" ? "foráneo" : "local") + "</span></div>" +
       '<p class="tenue" style="margin:4px 0">' + esc(s.telefono) + (s.ciudad ? " · " + esc(s.ciudad) : "") + " · " + fecha(s.creada_en) + "</p>" +
