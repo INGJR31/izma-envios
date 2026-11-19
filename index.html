@@ -2045,6 +2045,68 @@ function ESPACIOS_LISTA() {
   return Array.isArray(g) && g.length ? g : ESPACIOS_DEFAULT;
 }
 
+/* ===== Mayoreo: 3 niveles guardados dentro de la descripción (sin tocar la base) ===== */
+const MAY_MARCA = "\n⟦MAY⟧";   // separador oculto
+function leerMayoreo(descripcion) {
+  const s = String(descripcion || "");
+  const i = s.indexOf(MAY_MARCA);
+  if (i < 0) return { desc: s, may: null };
+  try { return { desc: s.slice(0, i), may: JSON.parse(s.slice(i + MAY_MARCA.length)) }; }
+  catch { return { desc: s.slice(0, i), may: null }; }
+}
+function empacarMayoreo(desc, may) {
+  const base = String(desc || "").split(MAY_MARCA)[0];
+  if (may && may.activo && (Number(may.m1) > 0 || Number(may.m2) > 0)) {
+    return base + MAY_MARCA + JSON.stringify({
+      m1: Number(may.m1) || 0, p1: Number(may.p1) || 0,
+      m2: Number(may.m2) || 0, p2: Number(may.p2) || 0
+    });
+  }
+  return base;
+}
+function precioPorCantidad(precioBase, may, cantidad) {
+  if (!may) return precioBase;
+  if (Number(may.m2) > 0 && cantidad >= may.m2 && Number(may.p2) > 0) return Number(may.p2);
+  if (Number(may.m1) > 0 && cantidad >= may.m1 && Number(may.p1) > 0) return Number(may.p1);
+  return precioBase;
+}
+function textoMayoreo(may) {
+  if (!may) return "";
+  const t = [];
+  if (Number(may.m1) > 0 && Number(may.p1) > 0) t.push("desde " + may.m1 + " pzas " + dinero(may.p1));
+  if (Number(may.m2) > 0 && Number(may.p2) > 0) t.push("desde " + may.m2 + " pzas " + dinero(may.p2));
+  return t.join(" · ");
+}
+// Bloque de formulario para precios por mayoreo (se usa al subir y al editar)
+function bloqueMayoreoForm(may, suf) {
+  suf = suf || "";
+  const on = !!(may && may.activo);
+  return '<div class="campo" style="background:var(--kraft-claro);border:1px solid #Bfe3cf;border-radius:10px;padding:10px 12px;margin-top:4px">' +
+    '<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer">' +
+      '<input type="checkbox" id="may-on' + suf + '"' + (on ? " checked" : "") + '> Activar precios por mayoreo</label>' +
+    '<div id="may-campos' + suf + '" ' + (on ? "" : 'style="display:none"') + '>' +
+      '<p class="tenue" style="margin:8px 0 4px">Medio mayoreo</p><div class="dos">' +
+        '<label class="campo"><span>Desde (piezas)</span><input id="may-m1' + suf + '" inputmode="numeric" value="' + (may && may.m1 ? may.m1 : "") + '" placeholder="ej. 6"></label>' +
+        '<label class="campo"><span>Precio c/u</span><input id="may-p1' + suf + '" inputmode="decimal" value="' + (may && may.p1 ? may.p1 : "") + '" placeholder="0.00"></label></div>' +
+      '<p class="tenue" style="margin:8px 0 4px">Mayoreo</p><div class="dos">' +
+        '<label class="campo"><span>Desde (piezas)</span><input id="may-m2' + suf + '" inputmode="numeric" value="' + (may && may.m2 ? may.m2 : "") + '" placeholder="ej. 12"></label>' +
+        '<label class="campo"><span>Precio c/u</span><input id="may-p2' + suf + '" inputmode="decimal" value="' + (may && may.p2 ? may.p2 : "") + '" placeholder="0.00"></label></div>' +
+    "</div></div>";
+}
+function enlazarMayoreoForm(suf) {
+  suf = suf || "";
+  const chk = $("#may-on" + suf);
+  if (chk) chk.onchange = () => { $("#may-campos" + suf).style.display = chk.checked ? "" : "none"; };
+}
+function leerFormMayoreo(suf) {
+  suf = suf || "";
+  const chk = $("#may-on" + suf);
+  if (!chk || !chk.checked) return { activo: false };
+  return { activo: true,
+    m1: Number($("#may-m1" + suf).value || 0), p1: Number($("#may-p1" + suf).value || 0),
+    m2: Number($("#may-m2" + suf).value || 0), p2: Number($("#may-p2" + suf).value || 0) };
+}
+
 /* ===== Área LOCAL: venta privada que solo ven clientes autorizados ===== */
 function ESPACIO_LOCAL() { return (E.config && E.config.espacio_local) || "Local"; }
 /* Nombre comercial de esa tienda (editable en Ajustes) */
@@ -2210,7 +2272,7 @@ VISTAS.bodega = async () => {
       '<p class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
         '<span class="sello ' + (p.disponible ? "verde" : "rojo") + ' num">' +
         (p.disponible ? p.disponible + " en existencia" : "Agotado") + "</span></p>" +
-      (p.descripcion ? "<p>" + esc(p.descripcion) + "</p>" : "") +
+      (leerMayoreo(p.descripcion).desc ? "<p>" + esc(leerMayoreo(p.descripcion).desc) + "</p>" : "") + (leerMayoreo(p.descripcion).may ? '<div class="sello kraft num" style="margin:4px 0">🏷️ Mayoreo · ' + textoMayoreo(leerMayoreo(p.descripcion).may) + "</div>" : "") +
       '<p class="tenue">Subió: ' + esc(p.vendedor) + (p.origen ? " · " + esc(p.origen) : "") + "</p>" +
       '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
   });
@@ -2256,7 +2318,7 @@ VISTAS.local = async () => {
       '<p class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
         '<span class="sello ' + (p.disponible ? "verde" : "rojo") + ' num">' +
         (p.disponible ? p.disponible + " en existencia" : "Agotado") + "</span></p>" +
-      (p.descripcion ? "<p>" + esc(p.descripcion) + "</p>" : "") +
+      (leerMayoreo(p.descripcion).desc ? "<p>" + esc(leerMayoreo(p.descripcion).desc) + "</p>" : "") + (leerMayoreo(p.descripcion).may ? '<div class="sello kraft num" style="margin:4px 0">🏷️ Mayoreo · ' + textoMayoreo(leerMayoreo(p.descripcion).may) + "</div>" : "") +
       '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
   });
 };
@@ -2541,7 +2603,8 @@ function pieza(p) {
     "</div>" +
     '<div class="cuerpo">' +
       '<div class="titulo">' + esc(p.titulo) + "</div>" +
-      (p.descripcion ? '<div class="tenue">' + esc(p.descripcion) + "</div>" : "") +
+      (leerMayoreo(p.descripcion).desc ? '<div class="tenue">' + esc(leerMayoreo(p.descripcion).desc) + "</div>" : "") +
+      (leerMayoreo(p.descripcion).may ? '<div class="sello kraft num" style="margin:3px 0">🏷️ Mayoreo · ' + textoMayoreo(leerMayoreo(p.descripcion).may) + "</div>" : "") +
       '<div class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
         (libre ? '<span class="sello verde num">' + p.disponible + " en existencia</span>"
                : '<span class="sello rojo">Agotado</span>') + "</div>" +
@@ -2939,6 +3002,7 @@ VISTAS.publicar = async () => {
       '<div class="dos">' +
         '<label class="campo"><span>Precio por pieza</span><input id="precio" inputmode="decimal" placeholder="0.00"></label>' +
         '<label class="campo"><span>Piezas en existencia</span><input id="cantidad" inputmode="numeric" value="1"></label></div>' +
+      bloqueMayoreoForm(null) +
       '<div class="dos">' +
         '<label class="campo"><span>Categoría</span><input id="cat" list="cats" placeholder="Ropa, calzado, juguetes…">' +
           '<datalist id="cats"><option>Ropa</option><option>Calzado</option><option>Juguetes</option><option>Hogar</option>' +
@@ -2969,6 +3033,7 @@ VISTAS.publicar = async () => {
   $("#btn-galeria").onclick = () => $("#archivos").click();
   pintarTiras();
 
+  enlazarMayoreoForm();
   $("#publicar").onclick = async () => {
     const b = $("#publicar");
     b.disabled = true; b.textContent = "Publicando…";
@@ -2976,7 +3041,7 @@ VISTAS.publicar = async () => {
       const r = await rpc("publicar_producto", {
         p_token: E.token,
         p_datos: {
-          titulo: $("#titulo").value, descripcion: $("#desc").value,
+          titulo: $("#titulo").value, descripcion: empacarMayoreo($("#desc").value, leerFormMayoreo()),
           categoria: $("#cat").value, precio: Number($("#precio").value || 0),
           cantidad: parseInt($("#cantidad").value || "1", 10),
           origen: $("#origen").value, media: E.media
@@ -3257,16 +3322,19 @@ function enlazarEditar(lista) {
           '<option value="oculto"' + (p.estado === "oculto" ? " selected" : "") + ">Oculto</option></select></label>" +
         '<label class="campo"><span>Espacio o tienda</span><input id="e-origen" list="espacios-ed" value="' + esc(p.origen || "") + '">' +
           '<datalist id="espacios-ed">' + ESPACIOS_LISTA().map(x => "<option>" + x + "</option>").join("") + "</datalist></label></div>" +
+      bloqueMayoreoForm((() => { const m = leerMayoreo(p.descripcion).may; return m ? Object.assign({ activo: true }, m) : null; })(), "-ed") +
       '<div class="mensaje info">Tiene ' + (p.apartados || 0) + " apartadas y " + (p.vendidos || 0) + " vendidas.</div>" +
       '<button class="btn lleno" id="e-guardar">Guardar</button>' +
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    enlazarMayoreoForm("-ed");
     $("#e-guardar").onclick = async () => {
       try {
         const r = await rpc("editar_producto", {
           p_token: E.token, p_id: p.id,
           p_datos: { titulo: $("#e-titulo").value, precio: Number($("#e-precio").value || 0),
                      cantidad: parseInt($("#e-cant").value || "0", 10), estado: $("#e-estado").value,
-                     origen: $("#e-origen").value }
+                     origen: $("#e-origen").value,
+                     descripcion: empacarMayoreo(leerMayoreo(p.descripcion).desc, leerFormMayoreo("-ed")) }
         });
         if (!r.ok) throw new Error(r.motivo);
         cerrarHoja(); aviso("Producto actualizado", "bien"); pintar();
