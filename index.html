@@ -2048,8 +2048,9 @@ function ESPACIOS_LISTA() {
 /* ===== Datos ocultos del producto (mayoreo + historial de cambios) en la descripción ===== */
 const MK_MAY = "\n⟦MAY⟧";
 const MK_HIST = "\n⟦HIST⟧";
+const MK_TALLA = "\n⟦TAL⟧";
 function metaProducto(descripcion) {
-  let s = String(descripcion || ""); let may = null; let hist = [];
+  let s = String(descripcion || ""); let may = null; let hist = []; let tallas = [];
   const sacar = (marca) => {
     const i = s.indexOf(marca);
     if (i < 0) return null;
@@ -2060,20 +2061,26 @@ function metaProducto(descripcion) {
     return blob;
   };
   const bH = sacar(MK_HIST); if (bH) { try { hist = JSON.parse(bH) || []; } catch { } }
+  const bT = sacar(MK_TALLA); if (bT) { try { tallas = JSON.parse(bT) || []; } catch { } }
   const bM = sacar(MK_MAY); if (bM) { try { may = JSON.parse(bM); } catch { } }
-  return { desc: s, may, hist };
+  return { desc: s, may, hist, tallas };
 }
-function empacarProducto(desc, may, hist) {
+function empacarProducto(desc, may, hist, tallas) {
   let out = metaProducto(desc).desc;
   if (may && may.activo && (Number(may.m1) > 0 || Number(may.m2) > 0)) {
     out += MK_MAY + JSON.stringify({ m1: Number(may.m1) || 0, p1: Number(may.p1) || 0, m2: Number(may.m2) || 0, p2: Number(may.p2) || 0 });
   }
+  if (tallas && tallas.length) out += MK_TALLA + JSON.stringify(tallas.map(t => ({ t: String(t.t), c: Number(t.c) || 0 })));
   if (hist && hist.length) out += MK_HIST + JSON.stringify(hist.slice(-15));
   return out;
 }
+function textoTallas(tallas) {
+  if (!tallas || !tallas.length) return "";
+  return tallas.map(t => t.t + ": " + (Number(t.c) || 0)).join(" · ");
+}
 // Compatibilidad: leerMayoreo devuelve {desc, may}
 function leerMayoreo(descripcion) { const m = metaProducto(descripcion); return { desc: m.desc, may: m.may }; }
-function empacarMayoreo(desc, may) { return empacarProducto(desc, may, metaProducto(desc).hist); }
+function empacarMayoreo(desc, may) { const m = metaProducto(desc); return empacarProducto(desc, may, m.hist, m.tallas); }
 function precioPorCantidad(precioBase, may, cantidad) {
   if (!may) return precioBase;
   if (Number(may.m2) > 0 && cantidad >= may.m2 && Number(may.p2) > 0) return Number(may.p2);
@@ -2115,6 +2122,57 @@ function leerFormMayoreo(suf) {
   return { activo: true,
     m1: Number($("#may-m1" + suf).value || 0), p1: Number($("#may-p1" + suf).value || 0),
     m2: Number($("#may-m2" + suf).value || 0), p2: Number($("#may-p2" + suf).value || 0) };
+}
+
+/* ===== Tallas / variantes: cuántas piezas por talla ===== */
+function bloqueTallasForm(tallas, suf) {
+  suf = suf || "";
+  const activo = !!(tallas && tallas.length);
+  return '<div class="campo" style="background:#EFF4FF;border:1px solid #cdd9f0;border-radius:10px;padding:10px 12px;margin-top:4px">' +
+    '<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer"><input type="checkbox" id="tl-on' + suf + '"' + (activo ? " checked" : "") + "> Manejar por tallas</label>" +
+    '<div id="tl-wrap' + suf + '"' + (activo ? "" : ' style="display:none"') + ">" +
+      '<p class="tenue" style="margin:8px 0 6px">Pon cuántas piezas hay de cada talla. El total de existencia se suma solo.</p>' +
+      '<div id="tl-rows' + suf + '"></div>' +
+      '<button type="button" class="btn claro chico" id="tl-add' + suf + '">+ Agregar talla</button>' +
+      '<div class="num" id="tl-total' + suf + '" style="margin-top:6px;font-weight:600"></div>' +
+    "</div></div>";
+}
+function filaTallaHTML(suf, t, c) {
+  const est = 'style="padding:10px;border:1px solid var(--linea);border-radius:8px;font:inherit;width:100%"';
+  return '<div class="tl-fila" style="display:flex;gap:6px;margin-bottom:6px">' +
+    '<input class="tl-t' + suf + '" placeholder="Talla (Ch, M, G, 26…)" value="' + esc(t || "") + '" ' + est + ' style="padding:10px;border:1px solid var(--linea);border-radius:8px;font:inherit;flex:2">' +
+    '<input class="tl-c' + suf + '" inputmode="numeric" placeholder="piezas" value="' + (c || "") + '" style="padding:10px;border:1px solid var(--linea);border-radius:8px;font:inherit;flex:1">' +
+    '<button type="button" class="btn claro chico tl-x" style="flex:none">✕</button></div>';
+}
+function enlazarTallasForm(suf, tallas) {
+  suf = suf || "";
+  const chk = $("#tl-on" + suf), wrap = $("#tl-wrap" + suf), rows = $("#tl-rows" + suf);
+  if (!chk) return;
+  const total = () => { let s = 0; $$(".tl-c" + suf).forEach(i => s += parseInt(i.value || "0", 10) || 0);
+    if ($("#tl-total" + suf)) $("#tl-total" + suf).textContent = "Total en existencia: " + s + " piezas"; };
+  const addRow = (t, c) => { rows.insertAdjacentHTML("beforeend", filaTallaHTML(suf, t, c)); enlaza(); total(); };
+  const enlaza = () => {
+    $$("#tl-rows" + suf + " .tl-x").forEach(b => b.onclick = () => { b.closest(".tl-fila").remove(); total(); });
+    $$(".tl-c" + suf).forEach(i => i.oninput = total);
+  };
+  rows.innerHTML = "";
+  (tallas && tallas.length ? tallas : []).forEach(x => addRow(x.t, x.c));
+  if (!(tallas && tallas.length)) addRow("", "");
+  $("#tl-add" + suf).onclick = () => addRow("", "");
+  chk.onchange = () => { wrap.style.display = chk.checked ? "" : "none"; };
+  enlaza(); total();
+}
+function leerFormTallas(suf) {
+  suf = suf || "";
+  const chk = $("#tl-on" + suf);
+  if (!chk || !chk.checked) return [];
+  const out = [];
+  $$("#tl-rows" + suf + " .tl-fila").forEach(f => {
+    const t = (f.querySelector(".tl-t" + suf).value || "").trim();
+    const c = parseInt(f.querySelector(".tl-c" + suf).value || "0", 10) || 0;
+    if (t && c > 0) out.push({ t, c });
+  });
+  return out;
 }
 
 /* ===== Área LOCAL: venta privada que solo ven clientes autorizados ===== */
@@ -2282,7 +2340,7 @@ VISTAS.bodega = async () => {
       '<p class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
         '<span class="sello ' + (p.disponible ? "verde" : "rojo") + ' num">' +
         (p.disponible ? p.disponible + " en existencia" : "Agotado") + "</span></p>" +
-      (leerMayoreo(p.descripcion).desc ? "<p>" + esc(leerMayoreo(p.descripcion).desc) + "</p>" : "") + (leerMayoreo(p.descripcion).may ? '<div class="sello kraft num" style="margin:4px 0">🏷️ Mayoreo · ' + textoMayoreo(leerMayoreo(p.descripcion).may) + "</div>" : "") +
+      (leerMayoreo(p.descripcion).desc ? "<p>" + esc(leerMayoreo(p.descripcion).desc) + "</p>" : "") + (metaProducto(p.descripcion).tallas.length ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0"><b style="width:100%">Tallas disponibles:</b>' + metaProducto(p.descripcion).tallas.map(t => '<span class="sello ' + ((Number(t.c)||0)>0?"verde":"rojo") + ' num">' + esc(t.t) + ": " + (Number(t.c)||0) + "</span>").join("") + "</div>" : "") + (leerMayoreo(p.descripcion).may ? '<div class="sello kraft num" style="margin:4px 0">🏷️ Mayoreo · ' + textoMayoreo(leerMayoreo(p.descripcion).may) + "</div>" : "") +
       '<p class="tenue">Subió: ' + esc(p.vendedor) + (p.origen ? " · " + esc(p.origen) : "") + "</p>" +
       '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
   });
@@ -2328,7 +2386,7 @@ VISTAS.local = async () => {
       '<p class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
         '<span class="sello ' + (p.disponible ? "verde" : "rojo") + ' num">' +
         (p.disponible ? p.disponible + " en existencia" : "Agotado") + "</span></p>" +
-      (leerMayoreo(p.descripcion).desc ? "<p>" + esc(leerMayoreo(p.descripcion).desc) + "</p>" : "") + (leerMayoreo(p.descripcion).may ? '<div class="sello kraft num" style="margin:4px 0">🏷️ Mayoreo · ' + textoMayoreo(leerMayoreo(p.descripcion).may) + "</div>" : "") +
+      (leerMayoreo(p.descripcion).desc ? "<p>" + esc(leerMayoreo(p.descripcion).desc) + "</p>" : "") + (metaProducto(p.descripcion).tallas.length ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0"><b style="width:100%">Tallas disponibles:</b>' + metaProducto(p.descripcion).tallas.map(t => '<span class="sello ' + ((Number(t.c)||0)>0?"verde":"rojo") + ' num">' + esc(t.t) + ": " + (Number(t.c)||0) + "</span>").join("") + "</div>" : "") + (leerMayoreo(p.descripcion).may ? '<div class="sello kraft num" style="margin:4px 0">🏷️ Mayoreo · ' + textoMayoreo(leerMayoreo(p.descripcion).may) + "</div>" : "") +
       '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
   });
 };
@@ -2613,8 +2671,10 @@ function pieza(p) {
     "</div>" +
     '<div class="cuerpo">' +
       '<div class="titulo">' + esc(p.titulo) + "</div>" +
-      (leerMayoreo(p.descripcion).desc ? '<div class="tenue">' + esc(leerMayoreo(p.descripcion).desc) + "</div>" : "") +
-      (leerMayoreo(p.descripcion).may ? '<div class="sello kraft num" style="margin:3px 0">🏷️ Mayoreo · ' + textoMayoreo(leerMayoreo(p.descripcion).may) + "</div>" : "") +
+      (metaProducto(p.descripcion).desc ? '<div class="tenue">' + esc(metaProducto(p.descripcion).desc) + "</div>" : "") +
+      (metaProducto(p.descripcion).tallas.length ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">' +
+        metaProducto(p.descripcion).tallas.map(t => '<span class="sello ' + ((Number(t.c) || 0) > 0 ? "verde" : "rojo") + ' num">' + esc(t.t) + ": " + (Number(t.c) || 0) + "</span>").join("") + "</div>" : "") +
+      (metaProducto(p.descripcion).may ? '<div class="sello kraft num" style="margin:3px 0">🏷️ Mayoreo · ' + textoMayoreo(metaProducto(p.descripcion).may) + "</div>" : "") +
       '<div class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
         (libre ? '<span class="sello verde num">' + p.disponible + " en existencia</span>"
                : '<span class="sello rojo">Agotado</span>') + "</div>" +
@@ -3012,6 +3072,7 @@ VISTAS.publicar = async () => {
       '<div class="dos">' +
         '<label class="campo"><span>Precio por pieza</span><input id="precio" inputmode="decimal" placeholder="0.00"></label>' +
         '<label class="campo"><span>Piezas en existencia</span><input id="cantidad" inputmode="numeric" value="1"></label></div>' +
+      bloqueTallasForm(null, "") +
       bloqueMayoreoForm(null) +
       '<div class="dos">' +
         '<label class="campo"><span>Categoría</span><input id="cat" list="cats" placeholder="Ropa, calzado, juguetes…">' +
@@ -3044,16 +3105,20 @@ VISTAS.publicar = async () => {
   pintarTiras();
 
   enlazarMayoreoForm();
+  enlazarTallasForm("", null);
   $("#publicar").onclick = async () => {
     const b = $("#publicar");
+    const tallas = leerFormTallas("");
+    const cant = tallas.length ? tallas.reduce((s, t) => s + t.c, 0) : parseInt($("#cantidad").value || "1", 10);
     b.disabled = true; b.textContent = "Publicando…";
     try {
       const r = await rpc("publicar_producto", {
         p_token: E.token,
         p_datos: {
-          titulo: $("#titulo").value, descripcion: empacarMayoreo($("#desc").value, leerFormMayoreo()),
+          titulo: $("#titulo").value,
+          descripcion: empacarProducto($("#desc").value, leerFormMayoreo(), [], tallas),
           categoria: $("#cat").value, precio: Number($("#precio").value || 0),
-          cantidad: parseInt($("#cantidad").value || "1", 10),
+          cantidad: cant,
           origen: $("#origen").value, media: E.media
         }
       });
@@ -3344,6 +3409,7 @@ function enlazarEditar(lista) {
           '<option value="oculto"' + (p.estado === "oculto" ? " selected" : "") + ">Oculto</option></select></label>" +
         '<label class="campo"><span>Espacio o tienda</span><input id="e-origen" list="espacios-ed" value="' + esc(p.origen || "") + '">' +
           '<datalist id="espacios-ed">' + ESPACIOS_LISTA().map(x => "<option>" + x + "</option>").join("") + "</datalist></label></div>" +
+      bloqueTallasForm(meta.tallas, "-ed") +
       bloqueMayoreoForm(mayIni, "-ed") +
       '<label class="campo"><span>¿Por qué el cambio? (obligatorio)</span><input id="e-motivo" placeholder="Ej. subí fotos, bajé precio, corregí piezas…"></label>' +
       '<div class="mensaje info">Tiene ' + (p.apartados || 0) + " apartadas y " + (p.vendidos || 0) + " vendidas.</div>" +
@@ -3354,6 +3420,7 @@ function enlazarEditar(lista) {
       '<button class="btn lleno" id="e-guardar">Guardar cambio</button>' +
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
     enlazarMayoreoForm("-ed");
+    enlazarTallasForm("-ed", meta.tallas);
     pintarTirasEdit();
     const procesarEdit = async ev => {
       const files = [...ev.target.files]; ev.target.value = "";
@@ -3376,7 +3443,8 @@ function enlazarEditar(lista) {
       if (motivo.length < 4) return aviso("Escribe por qué cambiaste el producto", "mal");
       // Detectar qué cambió
       const nuevoPrecio = Number($("#e-precio").value || 0);
-      const nuevaCant = parseInt($("#e-cant").value || "0", 10);
+      const nuevasTallas = leerFormTallas("-ed");
+      const nuevaCant = nuevasTallas.length ? nuevasTallas.reduce((s, t) => s + t.c, 0) : parseInt($("#e-cant").value || "0", 10);
       const nuevoEstado = $("#e-estado").value;
       const nuevoOrigen = $("#e-origen").value;
       const nuevaDesc = $("#e-desc").value;
@@ -3388,6 +3456,7 @@ function enlazarEditar(lista) {
       if (nuevoOrigen !== (p.origen || "")) cambios.push("espacio → " + (nuevoOrigen || "—"));
       if ((nuevaDesc || "") !== (meta.desc || "")) cambios.push("cambió el detalle");
       if (E.mediaEdit.length !== (p.media || []).length) cambios.push("fotos/video (" + (p.media || []).length + " → " + E.mediaEdit.length + ")");
+      if (JSON.stringify(nuevasTallas) !== JSON.stringify(meta.tallas || [])) cambios.push("cambió las tallas");
       if (JSON.stringify(nuevaMay.activo ? { m1: +nuevaMay.m1, p1: +nuevaMay.p1, m2: +nuevaMay.m2, p2: +nuevaMay.p2 } : null) !== JSON.stringify(meta.may)) cambios.push("cambió el mayoreo");
       if (!cambios.length) cambios.push("sin cambios de datos");
       const hist = [...(meta.hist || []), { en: new Date().toISOString(), por: E.yo.nombre, motivo, cambios }];
@@ -3397,7 +3466,7 @@ function enlazarEditar(lista) {
           p_datos: {
             titulo: $("#e-titulo").value, precio: nuevoPrecio, cantidad: nuevaCant,
             estado: nuevoEstado, origen: nuevoOrigen, media: E.mediaEdit,
-            descripcion: empacarProducto(nuevaDesc, nuevaMay, hist)
+            descripcion: empacarProducto(nuevaDesc, nuevaMay, hist, nuevasTallas)
           }
         });
         if (!r.ok) throw new Error(r.motivo);
