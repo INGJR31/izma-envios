@@ -2851,9 +2851,13 @@ VISTAS.publicar = async () => {
   $("#vista").innerHTML =
     '<div class="tarjeta"><h2>Subir producto a la bodega</h2>' +
       '<p class="tenue" style="margin-top:0">Foto o video, precio de venta y cuántas piezas hay en existencia.</p>' +
-      '<label class="suelta"><b>Agregar fotos o video</b>' +
-        '<div class="tenue" style="color:#0B6B3A">Fotos y video, las que quieras. Las fotos se comprimen solas.</div>' +
-        '<input type="file" id="archivos" accept="image/*,video/*" multiple hidden></label>' +
+      '<div class="suelta"><b>Agregar fotos o video</b>' +
+        '<div class="tenue" style="color:#0B6B3A">Toma la foto al momento o elige de tu galería. Se comprimen solas.</div>' +
+        '<div class="fila" style="gap:8px;margin-top:10px;justify-content:center;flex-wrap:wrap">' +
+          '<button type="button" class="btn kraft chico" id="btn-camara">📷 Tomar foto</button>' +
+          '<button type="button" class="btn claro chico" id="btn-galeria">🖼️ Galería o video</button></div>' +
+        '<input type="file" id="archivos-cam" accept="image/*" capture="environment" hidden>' +
+        '<input type="file" id="archivos" accept="image/*,video/*" multiple hidden></div>' +
       '<div class="barra" id="barra" hidden><i></i></div>' +
       '<div class="tiras" id="tiras"></div>' +
       '<label class="campo" style="margin-top:14px"><span>Qué es</span><input id="titulo" placeholder="Ej. Tenis Nike dama surtidos"></label>' +
@@ -2869,9 +2873,10 @@ VISTAS.publicar = async () => {
           '<datalist id="espacios">' + ESPACIOS_LISTA().map(x => "<option>" + x + "</option>").join("") + '</datalist></label></div>' +
       '<button class="btn lleno kraft" id="publicar">Publicar en la bodega</button></div>';
 
-  $("#archivos").onchange = async e => {
+  const procesarArchivos = async e => {
     const files = [...e.target.files];
     e.target.value = "";
+    if (!files.length) return;
     const barra = $("#barra"), i = barra.querySelector("i");
     barra.hidden = false;
     for (let k = 0; k < files.length; k++) {
@@ -2884,6 +2889,10 @@ VISTAS.publicar = async () => {
     }
     setTimeout(() => { barra.hidden = true; i.style.width = "0"; }, 500);
   };
+  $("#archivos").onchange = procesarArchivos;
+  $("#archivos-cam").onchange = procesarArchivos;
+  $("#btn-camara").onclick = () => $("#archivos-cam").click();
+  $("#btn-galeria").onclick = () => $("#archivos").click();
   pintarTiras();
 
   $("#publicar").onclick = async () => {
