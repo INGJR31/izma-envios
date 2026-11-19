@@ -2045,25 +2045,35 @@ function ESPACIOS_LISTA() {
   return Array.isArray(g) && g.length ? g : ESPACIOS_DEFAULT;
 }
 
-/* ===== Mayoreo: 3 niveles guardados dentro de la descripción (sin tocar la base) ===== */
-const MAY_MARCA = "\n⟦MAY⟧";   // separador oculto
-function leerMayoreo(descripcion) {
-  const s = String(descripcion || "");
-  const i = s.indexOf(MAY_MARCA);
-  if (i < 0) return { desc: s, may: null };
-  try { return { desc: s.slice(0, i), may: JSON.parse(s.slice(i + MAY_MARCA.length)) }; }
-  catch { return { desc: s.slice(0, i), may: null }; }
+/* ===== Datos ocultos del producto (mayoreo + historial de cambios) en la descripción ===== */
+const MK_MAY = "\n⟦MAY⟧";
+const MK_HIST = "\n⟦HIST⟧";
+function metaProducto(descripcion) {
+  let s = String(descripcion || ""); let may = null; let hist = [];
+  const sacar = (marca) => {
+    const i = s.indexOf(marca);
+    if (i < 0) return null;
+    const rest = s.slice(i + marca.length);
+    const iNext = rest.indexOf("\n⟦");
+    const blob = iNext >= 0 ? rest.slice(0, iNext) : rest;
+    s = s.slice(0, i) + (iNext >= 0 ? rest.slice(iNext) : "");
+    return blob;
+  };
+  const bH = sacar(MK_HIST); if (bH) { try { hist = JSON.parse(bH) || []; } catch { } }
+  const bM = sacar(MK_MAY); if (bM) { try { may = JSON.parse(bM); } catch { } }
+  return { desc: s, may, hist };
 }
-function empacarMayoreo(desc, may) {
-  const base = String(desc || "").split(MAY_MARCA)[0];
+function empacarProducto(desc, may, hist) {
+  let out = metaProducto(desc).desc;
   if (may && may.activo && (Number(may.m1) > 0 || Number(may.m2) > 0)) {
-    return base + MAY_MARCA + JSON.stringify({
-      m1: Number(may.m1) || 0, p1: Number(may.p1) || 0,
-      m2: Number(may.m2) || 0, p2: Number(may.p2) || 0
-    });
+    out += MK_MAY + JSON.stringify({ m1: Number(may.m1) || 0, p1: Number(may.p1) || 0, m2: Number(may.m2) || 0, p2: Number(may.p2) || 0 });
   }
-  return base;
+  if (hist && hist.length) out += MK_HIST + JSON.stringify(hist.slice(-15));
+  return out;
 }
+// Compatibilidad: leerMayoreo devuelve {desc, may}
+function leerMayoreo(descripcion) { const m = metaProducto(descripcion); return { desc: m.desc, may: m.may }; }
+function empacarMayoreo(desc, may) { return empacarProducto(desc, may, metaProducto(desc).hist); }
 function precioPorCantidad(precioBase, may, cantidad) {
   if (!may) return precioBase;
   if (Number(may.m2) > 0 && cantidad >= may.m2 && Number(may.p2) > 0) return Number(may.p2);
@@ -3311,8 +3321,20 @@ function fichaInventario(p) {
 function enlazarEditar(lista) {
   $$("[data-editar]").forEach(b => b.onclick = () => {
     const p = lista.find(x => x.id === b.dataset.editar) || {};
+    const meta = metaProducto(p.descripcion);
+    E.mediaEdit = (p.media || []).slice();
+    const mayIni = meta.may ? Object.assign({ activo: true }, meta.may) : null;
     hoja("<h2>Editar producto</h2>" +
       '<label class="campo"><span>Nombre</span><input id="e-titulo" value="' + esc(p.titulo || "") + '"></label>' +
+      '<label class="campo"><span>Detalle</span><textarea id="e-desc">' + esc(meta.desc || "") + "</textarea></label>" +
+      '<div class="suelta" style="margin-bottom:10px"><b>Fotos y video</b>' +
+        '<div class="tenue" style="color:#0B6B3A">Puedes agregar o quitar imágenes.</div>' +
+        '<div class="fila" style="gap:8px;margin-top:8px;justify-content:center;flex-wrap:wrap">' +
+          '<button type="button" class="btn kraft chico" id="e-camara">📷 Tomar foto</button>' +
+          '<button type="button" class="btn claro chico" id="e-galeria">🖼️ Galería o video</button></div>' +
+        '<input type="file" id="e-arch-cam" accept="image/*" capture="environment" hidden>' +
+        '<input type="file" id="e-arch" accept="image/*,video/*" multiple hidden></div>' +
+      '<div class="barra" id="e-barra" hidden><i></i></div><div class="tiras" id="e-tiras"></div>' +
       '<div class="dos">' +
         '<label class="campo"><span>Precio</span><input id="e-precio" inputmode="decimal" value="' + (p.precio || 0) + '"></label>' +
         '<label class="campo"><span>Piezas totales</span><input id="e-cant" inputmode="numeric" value="' + (p.cantidad || 0) + '"></label></div>' +
@@ -3322,25 +3344,74 @@ function enlazarEditar(lista) {
           '<option value="oculto"' + (p.estado === "oculto" ? " selected" : "") + ">Oculto</option></select></label>" +
         '<label class="campo"><span>Espacio o tienda</span><input id="e-origen" list="espacios-ed" value="' + esc(p.origen || "") + '">' +
           '<datalist id="espacios-ed">' + ESPACIOS_LISTA().map(x => "<option>" + x + "</option>").join("") + "</datalist></label></div>" +
-      bloqueMayoreoForm((() => { const m = leerMayoreo(p.descripcion).may; return m ? Object.assign({ activo: true }, m) : null; })(), "-ed") +
+      bloqueMayoreoForm(mayIni, "-ed") +
+      '<label class="campo"><span>¿Por qué el cambio? (obligatorio)</span><input id="e-motivo" placeholder="Ej. subí fotos, bajé precio, corregí piezas…"></label>' +
       '<div class="mensaje info">Tiene ' + (p.apartados || 0) + " apartadas y " + (p.vendidos || 0) + " vendidas.</div>" +
-      '<button class="btn lleno" id="e-guardar">Guardar</button>' +
+      (meta.hist && meta.hist.length ? '<details style="margin-bottom:10px"><summary class="tenue">Historial de cambios (' + meta.hist.length + ")</summary>" +
+        meta.hist.slice().reverse().map(x => '<div class="renglon"><div class="crece"><b>' + esc(x.motivo || "") + "</b>" +
+          '<div class="tenue">' + esc((x.cambios || []).join(", ")) + "</div>" +
+          '<div class="tenue">' + esc(x.por || "") + " · " + fecha(x.en) + "</div></div></div>").join("") + "</details>" : "") +
+      '<button class="btn lleno" id="e-guardar">Guardar cambio</button>' +
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
     enlazarMayoreoForm("-ed");
+    pintarTirasEdit();
+    const procesarEdit = async ev => {
+      const files = [...ev.target.files]; ev.target.value = "";
+      if (!files.length) return;
+      const barra = $("#e-barra"), i = barra.querySelector("i"); barra.hidden = false;
+      for (let k = 0; k < files.length; k++) {
+        try { E.mediaEdit.push(await subir(files[k], pr => { i.style.width = pr + "%"; })); }
+        catch (err) { aviso(err.message, "mal"); }
+        pintarTirasEdit();
+      }
+      setTimeout(() => { barra.hidden = true; i.style.width = "0"; }, 400);
+    };
+    $("#e-arch").onchange = procesarEdit;
+    $("#e-arch-cam").onchange = procesarEdit;
+    $("#e-camara").onclick = () => $("#e-arch-cam").click();
+    $("#e-galeria").onclick = () => $("#e-arch").click();
+
     $("#e-guardar").onclick = async () => {
+      const motivo = $("#e-motivo").value.trim();
+      if (motivo.length < 4) return aviso("Escribe por qué cambiaste el producto", "mal");
+      // Detectar qué cambió
+      const nuevoPrecio = Number($("#e-precio").value || 0);
+      const nuevaCant = parseInt($("#e-cant").value || "0", 10);
+      const nuevoEstado = $("#e-estado").value;
+      const nuevoOrigen = $("#e-origen").value;
+      const nuevaDesc = $("#e-desc").value;
+      const nuevaMay = leerFormMayoreo("-ed");
+      const cambios = [];
+      if (nuevoPrecio !== Number(p.precio || 0)) cambios.push("precio " + dinero(p.precio || 0) + " → " + dinero(nuevoPrecio));
+      if (nuevaCant !== Number(p.cantidad || 0)) cambios.push("piezas " + (p.cantidad || 0) + " → " + nuevaCant);
+      if (nuevoEstado !== (p.estado === "oculto" ? "oculto" : "activo")) cambios.push("estado → " + nuevoEstado);
+      if (nuevoOrigen !== (p.origen || "")) cambios.push("espacio → " + (nuevoOrigen || "—"));
+      if ((nuevaDesc || "") !== (meta.desc || "")) cambios.push("cambió el detalle");
+      if (E.mediaEdit.length !== (p.media || []).length) cambios.push("fotos/video (" + (p.media || []).length + " → " + E.mediaEdit.length + ")");
+      if (JSON.stringify(nuevaMay.activo ? { m1: +nuevaMay.m1, p1: +nuevaMay.p1, m2: +nuevaMay.m2, p2: +nuevaMay.p2 } : null) !== JSON.stringify(meta.may)) cambios.push("cambió el mayoreo");
+      if (!cambios.length) cambios.push("sin cambios de datos");
+      const hist = [...(meta.hist || []), { en: new Date().toISOString(), por: E.yo.nombre, motivo, cambios }];
       try {
         const r = await rpc("editar_producto", {
           p_token: E.token, p_id: p.id,
-          p_datos: { titulo: $("#e-titulo").value, precio: Number($("#e-precio").value || 0),
-                     cantidad: parseInt($("#e-cant").value || "0", 10), estado: $("#e-estado").value,
-                     origen: $("#e-origen").value,
-                     descripcion: empacarMayoreo(leerMayoreo(p.descripcion).desc, leerFormMayoreo("-ed")) }
+          p_datos: {
+            titulo: $("#e-titulo").value, precio: nuevoPrecio, cantidad: nuevaCant,
+            estado: nuevoEstado, origen: nuevoOrigen, media: E.mediaEdit,
+            descripcion: empacarProducto(nuevaDesc, nuevaMay, hist)
+          }
         });
         if (!r.ok) throw new Error(r.motivo);
-        cerrarHoja(); aviso("Producto actualizado", "bien"); pintar();
+        cerrarHoja(); aviso("Cambio guardado: " + cambios.join(", "), "bien"); pintar();
       } catch (err) { aviso(err.message, "mal"); }
     };
   });
+}
+function pintarTirasEdit() {
+  const c = $("#e-tiras"); if (!c) return;
+  c.innerHTML = (E.mediaEdit || []).map((m, i) => '<div class="tira">' +
+    (m.tipo === "video" ? '<video src="' + esc(m.url) + '" muted></video>' : '<img src="' + esc(m.url) + '" alt="">') +
+    '<button data-quita-e="' + i + '" aria-label="quitar">×</button></div>').join("");
+  $$("[data-quita-e]", c).forEach(b => b.onclick = () => { E.mediaEdit.splice(+b.dataset.quitaE, 1); pintarTirasEdit(); });
 }
 
 /* ===================== 12. administración ===================== */
