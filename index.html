@@ -3664,7 +3664,9 @@ VISTAS.usuarios = async () => {
         FILTROS_USUARIOS
           .map(r => '<button data-r="' + r[0] + '" aria-current="' + (filtro === r[0]) + '">' + r[1] + "</button>").join("") +
       '</div><button class="btn chico kraft" id="nuevo">Crear usuario</button></div>' +
-    lista.map(u => {
+    tarjetasUsuarios(lista, filtro);
+
+  function tarjetaUsuario(u) {
       const debe = u.saldo < 0;
       return '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(u.nombre) + "</h3>" +
         '<span class="sello ' + (u.estado === "activo" ? "verde" : "rojo") + '">' + esc(u.estado) + "</span></div>" +
@@ -3695,7 +3697,20 @@ VISTAS.usuarios = async () => {
           (ELIMINAR_ACTIVO && u.id !== E.yo.id ? '<button class="btn claro chico peligro" data-eliminar="' + u.id + '" data-nombre="' + esc(u.nombre) +
             '" data-usuario="' + esc(u.usuario) + '" data-saldo="' + (u.saldo || 0) + '">Eliminar</button>' : "") +
           "</div></div>";
-    }).join("");
+  }
+  function tarjetasUsuarios(arr, filtroActual) {
+    if (filtroActual === "vendedor") {
+      const pos = arr.filter(u => esVendedoraLocal(u.id));
+      const reg = arr.filter(u => !esVendedoraLocal(u.id));
+      const sec = (t, a) => a.length
+        ? '<h3 style="margin:18px 0 8px;font-size:15px;color:var(--tinta-2);border-bottom:1px solid var(--linea);padding-bottom:6px">' + t + " (" + a.length + ")</h3>" + a.map(tarjetaUsuario).join("")
+        : "";
+      return (pos.length ? sec("🏪 " + NEGOCIO_LOCAL(), pos) : "") +
+             sec(pos.length ? "Vendedores generales" : "Vendedores", reg) ||
+             '<div class="vacio"><h3>Sin vendedores</h3></div>';
+    }
+    return arr.map(tarjetaUsuario).join("") || '<div class="vacio"><h3>Nadie aquí todavía</h3></div>';
+  }
 
   if (mapa) enlazarMapa(mapa);
   $$("[data-local]").forEach(b => b.onclick = async () => {
