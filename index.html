@@ -2077,9 +2077,9 @@ const MENUS = {
             ["almacen", "Mi bodega"], ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
   vendedor: [["ventas", "Mis ventas"], ["publicar", "Subir producto"], ["inventario", "Lo que subí"],
              ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
-  admin: [["resumen", "Resumen"], ["actividad", "Actividad"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
+  admin: [["resumen", "Resumen"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
           ["almacen", "Bodega"], ["tienda_local", "La Bodeguita"], ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
-          ["usuarios", "Clientes"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"], ["cuenta", "Mi cuenta"]]
+          ["usuarios", "Clientes"], ["equipo", "Equipo"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"], ["cuenta", "Mi cuenta"]]
 };
 function saludo(frase) {
   const d = new Date();
@@ -2376,9 +2376,53 @@ VISTAS.pos_ventas = async () => {
 };
 
 /* ===== Sección aparte para admin y soporte: La Bodeguita ===== */
+function crearVendedoraLocal() {
+  const pin = String(Math.floor(100000 + Math.random() * 900000));
+  hoja("<h2>Alta de vendedora · " + esc(NEGOCIO_LOCAL()) + "</h2>" +
+    '<p class="tenue" style="margin-top:0">Se crea su cuenta y queda como punto de venta de esta tienda. Pásale el usuario y PIN por WhatsApp.</p>' +
+    '<label class="campo"><span>Nombre</span><input id="vl-nombre"></label>' +
+    '<div class="dos">' +
+      '<label class="campo"><span>Usuario</span><input id="vl-usuario" autocapitalize="none" placeholder="ej. tienda.ana"></label>' +
+      '<label class="campo"><span>PIN</span><input id="vl-pin" inputmode="numeric" value="' + pin + '"></label></div>' +
+    '<label class="campo"><span>WhatsApp (opcional)</span><input id="vl-tel" inputmode="tel"></label>' +
+    '<button class="btn lleno verde" id="vl-ok">Crear vendedora</button>' +
+    '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+  $("#vl-ok").onclick = async () => {
+    const usuario = $("#vl-usuario").value.trim(), pinv = $("#vl-pin").value.trim(), nombre = $("#vl-nombre").value.trim();
+    if (!nombre) return aviso("Escribe el nombre", "mal");
+    if (!/^[a-z0-9._-]{3,20}$/i.test(usuario)) return aviso("Usuario: 3 a 20 letras o números, sin espacios", "mal");
+    if (pinv.length < 6) return aviso("El PIN debe ser de 6 dígitos", "mal");
+    try {
+      const r = await rpc("admin_crear_usuario", {
+        p_token: E.token, p_usuario: usuario, p_pin_hash: await hashPin(usuario, pinv),
+        p_nombre: nombre, p_rol: "vendedor", p_tipo: "local", p_telefono: $("#vl-tel").value || "",
+        p_estado_mx: "", p_saldo: 0, p_limite: 0
+      });
+      if (!r.ok) throw new Error(r.motivo);
+      // Buscar su id y marcarla como punto de venta de la tienda
+      const uv = await rpc("admin_usuarios", { p_token: E.token, p_rol: "vendedor" });
+      const nueva = (uv.items || []).find(u => String(u.usuario).toLowerCase() === usuario.toLowerCase());
+      if (nueva) {
+        const lista = [...listaPosLocal(), nueva.id];
+        const rc = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { pos_local: lista } });
+        if (rc.ok) { E.config = rc.config; if (!Array.isArray(E.config.pos_local)) E.config.pos_local = lista; }
+      }
+      cerrarHoja();
+      hoja('<h2>Vendedora lista</h2><div class="mensaje kraft">Usuario <b>' + esc(usuario) + "</b> · PIN <b>" + pinv +
+        '</b><br>Cópialo ahora; el PIN no se vuelve a mostrar.</div>' +
+        '<a class="btn lleno verde" style="text-decoration:none;text-align:center;display:block" target="_blank" rel="noopener" href="https://wa.me/' +
+        esc(($("#vl-tel") ? "" : "")) + '?text=' + encodeURIComponent("Hola " + nombre + ", ya tienes acceso a " + NEGOCIO_LOCAL() + ".\nUsuario: " + usuario + "\nPIN: " + pinv + "\nEntra aquí: " + location.origin + location.pathname) + '">Enviar por WhatsApp</a>' +
+        '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Listo</button>');
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+}
+
 VISTAS.tienda_local = async () => {
   const tab = E.datos.tlTab || "hoy";
   const vent = await rpc("ventas_local", { p_token: E.token });
+  const uv = await rpc("admin_usuarios", { p_token: E.token, p_rol: "vendedor" });
+  const vendedoras = (uv.items || []).filter(u => u.estado !== "eliminado" && esVendedoraLocal(u.id));
   const prod = await rpc("admin_productos", { p_token: E.token, p_busqueda: "", p_archivados: false });
   const ventas = (vent && vent.items) || [];
   const inventario = (prod.items || []).filter(esProductoLocal);   // admin_productos ya excluye archivados
@@ -2405,7 +2449,7 @@ VISTAS.tienda_local = async () => {
       '<div class="monto num"' + (cancel ? ' style="text-decoration:line-through"' : "") + ">" + dinero(v.total) + "</div></div>";
   };
 
-  const tabs = [["hoy", "Ventas del día"], ["inventario", "Inventario"], ["movimiento", "Todo el movimiento"]];
+  const tabs = [["hoy", "Ventas del día"], ["inventario", "Inventario"], ["movimiento", "Todo el movimiento"], ["vendedoras", "Vendedoras"]];
 
   $("#vista").innerHTML =
     '<div class="tarjeta" style="background:#0B2A18;color:#fff;border:0"><h2 style="margin:0;color:#fff">' + esc(NEGOCIO_LOCAL()) + "</h2>" +
@@ -2431,10 +2475,40 @@ VISTAS.tienda_local = async () => {
       ? '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">Todas las ventas</h2>' +
           (canceladas ? '<span class="sello rojo">' + canceladas + " canceladas</span>" : "") + "</div>" +
         (ventas.length ? ventas.map(ventaRow).join("") : '<p class="tenue" style="margin:0">Sin ventas todavía.</p>') + "</div>"
+      : tab === "vendedoras"
+      ? '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">Vendedoras de la tienda</h2>' +
+          '<button class="btn kraft chico" id="tl-crear-vend">+ Alta vendedora</button></div>' +
+        '<p class="tenue" style="margin:4px 0 8px">Solo venden en esta tienda: no ven la bodega, no suben mercancía ni cambian precios.</p>' +
+        (vendedoras.length ? vendedoras.map(v => '<div class="renglon"><div class="crece"><b>' + esc(v.nombre) + "</b>" +
+          '<div class="tenue">' + esc(v.usuario) + (v.telefono ? " · " + esc(v.telefono) : "") + " · " +
+            (v.ultimo_acceso ? "entró " + fecha(v.ultimo_acceso) : "nunca ha entrado") + "</div></div>" +
+          '<div class="fila envolver" style="justify-content:flex-end">' +
+            '<button class="btn claro chico" data-vend-pin="' + v.id + '" data-usuario="' + esc(v.usuario) + '">Reiniciar PIN</button>' +
+            '<button class="btn claro chico peligro" data-vend-quita="' + v.id + '" data-nombre="' + esc(v.nombre) + '">Quitar</button></div></div>').join("")
+          : '<p class="tenue" style="margin:0">Aún no hay vendedoras. Toca “Alta vendedora”.</p>') + "</div>"
       : '<div class="tarjeta"><h2>Ventas de hoy · ' + delDia.length + "</h2>" +
         (delDia.length ? delDia.map(ventaRow).join("") : '<p class="tenue" style="margin:0">Hoy no hay ventas todavía.</p>') + "</div>");
 
   $$("[data-tl]").forEach(b => b.onclick = () => { E.datos.tlTab = b.dataset.tl; pintar(); });
+  if ($("#tl-crear-vend")) $("#tl-crear-vend").onclick = () => crearVendedoraLocal();
+  $$("[data-vend-quita]").forEach(b => b.onclick = async () => {
+    if (!confirm("¿Quitar a " + b.dataset.nombre + " como vendedora de la tienda? Su cuenta se conserva, solo deja de ser punto de venta.")) return;
+    const nueva = listaPosLocal().filter(x => x !== b.dataset.vendQuita);
+    try {
+      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { pos_local: nueva } });
+      if (!r.ok) throw new Error(r.motivo);
+      E.config = r.config; if (!Array.isArray(E.config.pos_local)) E.config.pos_local = nueva;
+      aviso("Vendedora quitada de la tienda", "bien"); pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-vend-pin]").forEach(b => b.onclick = async () => {
+    const nuevo = String(Math.floor(100000 + Math.random() * 900000));
+    try {
+      const r = await rpc("admin_editar_usuario", { p_token: E.token, p_id: b.dataset.vendPin, p_datos: { pin_hash: await hashPin(b.dataset.usuario, nuevo) } });
+      if (r && r.ok === false) throw new Error(r.motivo);
+      hoja('<h2>PIN reiniciado</h2><div class="mensaje kraft">Usuario <b>' + esc(b.dataset.usuario) + "</b> · PIN nuevo <b>" + nuevo + "</b><br>Mándaselo por WhatsApp; no vuelve a mostrarse.</div><button class=\"btn lleno claro\" data-cerrar>Ya lo copié</button>");
+    } catch (err) { aviso(err.message, "mal"); }
+  });
   if ($("#tl-subir")) $("#tl-subir").onclick = () => { E.espacioSugerido = ESPACIO_LOCAL(); ir("publicar"); };
   enlazarEditar(inventario);
   $$("[data-elim-prod]").forEach(b => b.onclick = () => {
@@ -3635,7 +3709,7 @@ async function vistaEliminados() {
   const items = (d && d.items) || [];
   $("#vista").innerHTML =
     '<div class="fila entre envolver" style="margin-bottom:12px"><div class="filtros" style="margin:0">' +
-      FILTROS_USUARIOS.map(r => '<button data-r="' + r[0] + '" aria-current="' + (r[0] === "eliminados") + '">' + r[1] + "</button>").join("") +
+      [["cliente", "Clientes"], ["eliminados", "Eliminados"]].map(r => '<button data-r="' + r[0] + '" aria-current="' + (r[0] === "eliminados") + '">' + r[1] + "</button>").join("") +
     "</div></div>" +
     (items.length ? items.map(x =>
       '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(x.nombre) + "</h3>" +
@@ -3649,21 +3723,38 @@ async function vistaEliminados() {
   $$("[data-r]").forEach(b => b.onclick = () => { E.datos.filtroRol = b.dataset.r; E.datos.estadoMapa = ""; pintar(); });
 }
 
-VISTAS.usuarios = async () => {
-  const filtro = E.datos.filtroRol === undefined ? "cliente" : E.datos.filtroRol;
+VISTAS.usuarios = () => pantallaUsuarios("clientes");
+VISTAS.equipo = () => pantallaUsuarios("equipo");
+
+async function pantallaUsuarios(area) {
+  const esEquipo = area === "equipo";
+  const filtros = esEquipo
+    ? [["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"]]
+    : (ELIMINAR_ACTIVO ? [["cliente", "Clientes"], ["eliminados", "Eliminados"]] : [["cliente", "Clientes"]]);
+  const permitidos = filtros.map(f => f[0]);
+  let filtro = E.datos.filtroRol;
+  if (filtro === undefined || !permitidos.includes(filtro)) filtro = filtros[0][0];
   if (filtro === "eliminados") return vistaEliminados();
+
   const d = await rpc("admin_usuarios", { p_token: E.token, p_rol: filtro });
   d.items = (d.items || []).filter(u => u.estado !== "eliminado");
-  const mapa = filtro === "cliente" || filtro === "" ? await rpc("admin_mapa", { p_token: E.token }) : null;
+  if (esEquipo) {
+    // El Equipo no muestra las vendedoras de La Bodeguita (esas van en su sección)
+    if (filtro === "") d.items = d.items.filter(u => u.rol === "vendedor" || u.rol === "admin");
+    d.items = d.items.filter(u => !(u.rol === "vendedor" && esVendedoraLocal(u.id)));
+  } else {
+    d.items = d.items.filter(u => u.rol === "cliente");
+  }
+  const mapa = (!esEquipo && filtro === "cliente") ? await rpc("admin_mapa", { p_token: E.token }) : null;
   const edoFiltro = E.datos.estadoMapa || "";
   const lista = edoFiltro ? d.items.filter(u => estadoDe(u) === edoFiltro) : d.items;
   $("#vista").innerHTML =
     (mapa ? bloqueMapa(mapa, edoFiltro) : "") +
+    (esEquipo ? '<div class="mensaje info" style="margin-top:0">Alta y administración de <b>administradores y vendedores</b>. Las vendedoras de La Bodeguita se dan de alta en su propia sección.</div>' : "") +
     '<div class="fila entre envolver" style="margin-bottom:12px">' +
       '<div class="filtros" style="margin:0">' +
-        FILTROS_USUARIOS
-          .map(r => '<button data-r="' + r[0] + '" aria-current="' + (filtro === r[0]) + '">' + r[1] + "</button>").join("") +
-      '</div><button class="btn chico kraft" id="nuevo">Crear usuario</button></div>' +
+        filtros.map(r => '<button data-r="' + r[0] + '" aria-current="' + (filtro === r[0]) + '">' + r[1] + "</button>").join("") +
+      '</div><button class="btn chico kraft" id="nuevo">' + (esEquipo ? "Crear admin o vendedor" : "Crear cliente") + "</button></div>" +
     tarjetasUsuarios(lista, filtro);
 
   function tarjetaUsuario(u) {
@@ -3688,8 +3779,6 @@ VISTAS.usuarios = async () => {
           (u.rol === "cliente" ? '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' : "") +
           (u.rol === "cliente" ? '<button class="btn ' + (clienteVeLocal(u.id) ? "verde" : "claro") + ' chico" data-local="' + u.id +
             '" data-nombre="' + esc(u.nombre) + '">' + (clienteVeLocal(u.id) ? "✓ Ve " + esc(ESPACIO_LOCAL().toUpperCase()) : "Dar " + esc(ESPACIO_LOCAL().toUpperCase())) + "</button>" : "") +
-          (u.rol === "vendedor" ? '<button class="btn ' + (esVendedoraLocal(u.id) ? "verde" : "claro") + ' chico" data-poslocal="' + u.id +
-            '" data-nombre="' + esc(u.nombre) + '">' + (esVendedoraLocal(u.id) ? "✓ Vendedora de " + esc(ESPACIO_LOCAL().toUpperCase()) : "Hacer vendedora de " + esc(ESPACIO_LOCAL().toUpperCase())) + "</button>" : "") +
           '<button class="btn claro chico" data-editar-u="' + u.id + '">Editar</button>' +
           '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
           '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
@@ -3698,17 +3787,7 @@ VISTAS.usuarios = async () => {
             '" data-usuario="' + esc(u.usuario) + '" data-saldo="' + (u.saldo || 0) + '">Eliminar</button>' : "") +
           "</div></div>";
   }
-  function tarjetasUsuarios(arr, filtroActual) {
-    if (filtroActual === "vendedor") {
-      const pos = arr.filter(u => esVendedoraLocal(u.id));
-      const reg = arr.filter(u => !esVendedoraLocal(u.id));
-      const sec = (t, a) => a.length
-        ? '<h3 style="margin:18px 0 8px;font-size:15px;color:var(--tinta-2);border-bottom:1px solid var(--linea);padding-bottom:6px">' + t + " (" + a.length + ")</h3>" + a.map(tarjetaUsuario).join("")
-        : "";
-      return (pos.length ? sec("🏪 " + NEGOCIO_LOCAL(), pos) : "") +
-             sec(pos.length ? "Vendedores generales" : "Vendedores", reg) ||
-             '<div class="vacio"><h3>Sin vendedores</h3></div>';
-    }
+  function tarjetasUsuarios(arr) {
     return arr.map(tarjetaUsuario).join("") || '<div class="vacio"><h3>Nadie aquí todavía</h3></div>';
   }
 
@@ -3865,8 +3944,8 @@ VISTAS.usuarios = async () => {
       '<label class="campo"><span>Nombre</span><input id="n-nombre"></label>' +
       '<div class="dos">' +
         '<label class="campo"><span>Rol</span><select id="n-rol">' +
-          '<option value="cliente">Cliente</option><option value="vendedor">Vendedor autorizado</option>' +
-          '<option value="admin">Administrador</option></select></label>' +
+          (esEquipo ? '<option value="vendedor">Vendedor</option><option value="admin">Administrador</option>'
+                    : '<option value="cliente">Cliente</option>') + "</select></label>" +
         '<label class="campo"><span>Tipo de cliente</span><select id="n-tipo">' +
           '<option value="local">Local</option><option value="foraneo">Foráneo</option></select></label></div>' +
       '<div class="dos">' +
