@@ -1703,6 +1703,32 @@ const LOCAL = {
     guardarBD();
     return { ok: true };
   },
+  admin_eliminar_usuario({ p_token, p_usuario, p_motivo, p_pin_hash }) {
+    const actor = exige(p_token, ["admin"]);
+    if (actor.pin_hash !== p_pin_hash) return { ok: false, motivo: "PIN incorrecto" };
+    const u = BD.usuarios.find(x => x.id === p_usuario);
+    if (!u) return { ok: false, motivo: "No existe" };
+    if (u.id === actor.id) return { ok: false, motivo: "No puedes eliminarte a ti mismo" };
+    if (!String(p_motivo || "").trim()) return { ok: false, motivo: "Falta el motivo" };
+    u.estado = "eliminado";
+    u.eliminado_motivo = String(p_motivo).trim();
+    u.eliminado_por = actor.nombre;
+    u.eliminado_en = ahora();
+    u.eliminado_saldo = u.saldo || 0;
+    BD.sesiones = BD.sesiones.filter(s => s.usuario_id !== u.id);
+    bitacora(actor, "eliminó al usuario", "usuario", u.usuario, { motivo: u.eliminado_motivo });
+    guardarBD();
+    return { ok: true };
+  },
+  admin_eliminados({ p_token }) {
+    exige(p_token, ["admin"]);
+    const items = BD.usuarios.filter(u => u.estado === "eliminado").map(u => ({
+      nombre: u.nombre, usuario: u.usuario, rol: u.rol, telefono: u.telefono, ciudad: u.ciudad,
+      motivo: u.eliminado_motivo, eliminado_por: u.eliminado_por, eliminado_en: u.eliminado_en,
+      saldo: u.eliminado_saldo
+    })).sort((a, b) => String(b.eliminado_en).localeCompare(String(a.eliminado_en)));
+    return { ok: true, items };
+  },
   admin_editar_usuario({ p_token, p_id, p_datos }) {
     exige(p_token, ["admin"]);
     const u = BD.usuarios.find(x => x.id === p_id);
@@ -3426,7 +3452,7 @@ function enlazarMapa(m) {
   if ($("[data-limpiar-edo]")) $("[data-limpiar-edo]").onclick = () => { E.datos.estadoMapa = ""; pintar(); };
 }
 
-const ELIMINAR_ACTIVO = false;   // ← ponlo en true cuando subas eliminar_usuario.sql a Supabase
+const ELIMINAR_ACTIVO = true;   // requiere admin_eliminar_usuario.sql en Supabase
 const FILTROS_USUARIOS = ELIMINAR_ACTIVO
   ? [["cliente", "Clientes"], ["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"], ["eliminados", "Eliminados"]]
   : [["cliente", "Clientes"], ["vendedor", "Vendedores"], ["admin", "Administradores"], ["", "Todos"]];
