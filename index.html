@@ -3128,6 +3128,35 @@ VISTAS.resumen = async () => {
       " minutos. Se cambian en Ajustes.</p></div>";
 };
 
+function detalleSolicitud(s) {
+  if (!s) return;
+  const foraneo = s.tipo_cliente === "foraneo";
+  const lugar = [s.ciudad, s.estado_mx].filter(Boolean).join(", ") || "No lo puso";
+  const mapsQ = encodeURIComponent([s.direccion, s.ciudad, s.estado_mx, "México"].filter(Boolean).join(", "));
+  const dato = (etq, val) => '<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--linea)">' +
+    '<span class="tenue" style="flex:none">' + etq + '</span>' +
+    '<span style="text-align:right;font-weight:600;max-width:62%">' + (val ? esc(val) : "—") + "</span></div>";
+  hoja("<h2>Solicitud de " + esc(s.nombre) + "</h2>" +
+    '<div class="mensaje ' + (foraneo ? "info" : "verde") + '" style="margin-top:0">' +
+      (foraneo ? "📦 <b>ZONA EXTENDIDA</b> · envío foráneo. Revisa costo y paquetería antes de autorizar."
+               : "🏠 <b>ZONA LOCAL</b> · entrega o recolección local.") + "</div>" +
+    '<div style="margin:6px 0 2px">' +
+      dato("Nombre", s.nombre) +
+      dato("WhatsApp", s.telefono) +
+      dato("Tipo", foraneo ? "Foráneo (zona extendida)" : "Local") +
+      dato("Ciudad / estado", lugar) +
+      dato("Paquetería", s.paqueteria) +
+      dato("Dirección de envío", s.direccion) +
+      dato("Referencia", s.referencia) +
+      dato("Solicitó", fecha(s.creada_en)) +
+    "</div>" +
+    '<a class="btn lleno claro" style="text-decoration:none;margin-top:10px" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + mapsQ + '">📍 Ver en el mapa dónde queda</a>' +
+    '<a class="btn lleno claro" style="text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="https://wa.me/' + esc(s.telefono.replace(/\D/g, "")) + '">Escribir por WhatsApp</a>' +
+    '<button class="btn lleno verde" style="margin-top:8px" id="ds-aprobar" data-nombre="' + esc(s.nombre) + '" data-id="' + s.id + '">Autorizar</button>' +
+    '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>');
+  $("#ds-aprobar").onclick = () => { cerrarHoja(); const real = document.querySelector('[data-aprobar="' + s.id + '"]'); if (real) real.click(); };
+}
+
 VISTAS.solicitudes = async () => {
   const d = await rpc("admin_solicitudes", { p_token: E.token, p_estado: "pendiente" });
   E.datos.pendSol = d.items.length;
@@ -3147,27 +3176,33 @@ VISTAS.solicitudes = async () => {
       (s.referencia ? '<p class="tenue" style="margin:0">Referencia: ' + esc(s.referencia) + "</p>" : "") +
       '<div class="fila envolver linea-arriba">' +
         '<button class="btn verde chico" data-aprobar="' + s.id + '" data-nombre="' + esc(s.nombre) + '">Autorizar</button>' +
+        '<button class="btn kraft chico" data-versol="' + s.id + '">Ver formulario</button>' +
         '<button class="btn claro chico" data-rechazar="' + s.id + '">Rechazar</button>' +
         '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' +
           esc(s.telefono.replace(/\D/g, "")) + '">WhatsApp</a></div></div>').join("");
+
+  $$("[data-versol]").forEach(b => b.onclick = () => detalleSolicitud(d.items.find(s => s.id === b.dataset.versol)));
 
   $$("[data-aprobar]").forEach(b => b.onclick = () => {
     const sugerido = b.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .split(/\s+/).slice(0, 2).join("").replace(/[^a-z0-9]/g, "").slice(0, 14);
     const pin = String(Math.floor(100000 + Math.random() * 900000));
     hoja("<h2>Autorizar a " + esc(b.dataset.nombre) + "</h2>" +
-      '<p class="tenue">Este usuario y PIN son los que le vas a pasar por WhatsApp.</p>' +
+      '<p class="tenue">Ponle su <b>usuario (apodo)</b> y PIN. Son los que le vas a pasar por WhatsApp.</p>' +
+      '<label class="campo"><span>Usuario / apodo (obligatorio)</span><input id="a-usuario" placeholder="escríbelo, ej. ' + esc(sugerido) + '" autocapitalize="none" autocomplete="off"></label>' +
+      '<button class="btn claro chico" id="a-sugerir" style="margin:-4px 0 8px">Usar sugerencia: ' + esc(sugerido) + "</button>" +
       '<div class="dos">' +
-        '<label class="campo"><span>Usuario</span><input id="a-usuario" value="' + esc(sugerido) + '" autocapitalize="none"></label>' +
-        '<label class="campo"><span>PIN temporal</span><input id="a-pin" value="' + pin + '" inputmode="numeric"></label></div>' +
-      '<div class="dos">' +
-        '<label class="campo"><span>Saldo a favor inicial</span><input id="a-saldo" inputmode="decimal" value="0"></label>' +
-        '<label class="campo"><span>Crédito autorizado</span><input id="a-limite" inputmode="decimal" value="0"></label></div>' +
+        '<label class="campo"><span>PIN temporal</span><input id="a-pin" value="' + pin + '" inputmode="numeric"></label>' +
+        '<label class="campo"><span>Saldo a favor inicial</span><input id="a-saldo" inputmode="decimal" value="0"></label></div>' +
+      '<label class="campo"><span>Crédito autorizado</span><input id="a-limite" inputmode="decimal" value="0"></label>' +
       '<button class="btn lleno verde" id="a-ok">Crear cuenta</button>' +
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    $("#a-sugerir").onclick = () => { $("#a-usuario").value = sugerido; $("#a-usuario").focus(); };
     $("#a-ok").onclick = async () => {
       const usuario = $("#a-usuario").value.trim(), pinv = $("#a-pin").value.trim();
-      if (!usuario || pinv.length < 6) return aviso("Falta usuario o PIN de 6 dígitos", "mal");
+      if (!usuario) return aviso("Escribe el usuario (apodo) del cliente", "mal");
+      if (!/^[a-z0-9._-]{3,20}$/i.test(usuario)) return aviso("El usuario: 3 a 20 letras o números, sin espacios", "mal");
+      if (pinv.length < 6) return aviso("El PIN debe ser de 6 dígitos", "mal");
       try {
         const r = await rpc("admin_aprobar_solicitud", {
           p_token: E.token, p_solicitud: b.dataset.aprobar, p_usuario: usuario,
