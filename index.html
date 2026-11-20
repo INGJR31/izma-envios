@@ -2295,6 +2295,8 @@ function cpDeTexto(t) {
 }
 function listaZonaExt() { const l = E.config && E.config.zona_ext; return Array.isArray(l) ? l : []; }
 function clienteZonaExt(id) { return listaZonaExt().includes(id); }
+function listaMorosos() { const l = E.config && E.config.morosos; return Array.isArray(l) ? l : []; }
+function clienteMoroso(id) { return listaMorosos().includes(id); }
 
 /* ===== Área LOCAL: venta privada que solo ven clientes autorizados ===== */
 function ESPACIO_LOCAL() { return (E.config && E.config.espacio_local) || "Local"; }
@@ -4111,7 +4113,9 @@ async function pantallaUsuarios(area) {
   function tarjetaUsuario(u) {
       const debe = u.saldo < 0;
       return '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(u.nombre) + "</h3>" +
-        '<div class="fila" style="gap:6px">' + (u.rol === "cliente" && clienteZonaExt(u.id) ? '<span class="sello kraft">📦 Zona extendida</span>' : "") +
+        '<div class="fila" style="gap:6px">' +
+        (u.rol === "cliente" && clienteMoroso(u.id) ? '<span class="sello rojo">⚠ Moroso</span>' : "") +
+        (u.rol === "cliente" && clienteZonaExt(u.id) ? '<span class="sello kraft">📦 Zona extendida</span>' : "") +
         '<span class="sello ' + (u.estado === "activo" ? "verde" : "rojo") + '">' + esc(u.estado) + "</span></div></div>" +
         '<p class="tenue" style="margin:4px 0">' + esc(u.usuario) + " · " + esc(u.rol) +
           (u.tipo_cliente ? " " + esc(u.tipo_cliente) : "") +
@@ -4133,6 +4137,9 @@ async function pantallaUsuarios(area) {
             '" data-nombre="' + esc(u.nombre) + '">' + (clienteVeLocal(u.id) ? "✓ Ve " + esc(ESPACIO_LOCAL().toUpperCase()) : "Dar " + esc(ESPACIO_LOCAL().toUpperCase())) + "</button>" : "") +
           (u.rol === "cliente" ? '<button class="btn ' + (clienteZonaExt(u.id) ? "kraft" : "claro") + ' chico" data-zonaext="' + u.id +
             '" data-nombre="' + esc(u.nombre) + '">' + (clienteZonaExt(u.id) ? "📦 Zona extendida" : "Marcar zona extendida") + "</button>" : "") +
+          (u.rol === "cliente" ? '<button class="btn ' + (clienteMoroso(u.id) ? "peligro" : "claro") + ' chico" data-moroso="' + u.id +
+            '" data-nombre="' + esc(u.nombre) + '">' + (clienteMoroso(u.id) ? "⚠ Moroso" : "Marcar moroso") + "</button>" : "") +
+          (u.rol === "cliente" ? '<button class="btn claro chico" data-recargo="' + u.id + '" data-nombre="' + esc(u.nombre) + '" data-rsaldo="' + (u.saldo || 0) + '">Recargo</button>' : "") +
           '<button class="btn claro chico" data-editar-u="' + u.id + '">Editar</button>' +
           '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
           '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
@@ -4171,6 +4178,52 @@ async function pantallaUsuarios(area) {
       aviso(nueva.includes(id) ? b.dataset.nombre + ": marcado como ZONA EXTENDIDA" : b.dataset.nombre + ": zona normal", "bien");
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-moroso]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.moroso;
+    const actual = listaMorosos();
+    const nueva = actual.includes(id) ? actual.filter(x => x !== id) : [...actual, id];
+    try {
+      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { morosos: nueva } });
+      if (!r.ok) throw new Error(r.motivo);
+      E.config = r.config; if (!Array.isArray(E.config.morosos)) E.config.morosos = nueva;
+      aviso(nueva.includes(id) ? b.dataset.nombre + ": marcado como MOROSO" : b.dataset.nombre + ": ya no es moroso", "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-recargo]").forEach(b => b.onclick = () => {
+    const saldo = Number(b.dataset.rsaldo || 0);
+    const debe = saldo < 0 ? Math.abs(saldo) : 0;
+    hoja("<h2>Recargo a " + esc(b.dataset.nombre) + "</h2>" +
+      '<p class="tenue" style="margin-top:0">Se suma a lo que debe y queda en su historial.' +
+        (debe ? " Hoy debe <b>" + dinero(debe) + "</b>." : " Hoy no tiene adeudo.") + "</p>" +
+      '<label class="campo"><span>Motivo</span><select id="rc-concepto">' +
+        ["Recargo por mora", "Interés por atraso", "Penalización", "Otro"].map(c => "<option>" + c + "</option>").join("") + "</select></label>" +
+      '<div class="dos">' +
+        '<label class="campo"><span>Monto a cobrar</span><input id="rc-monto" inputmode="decimal" placeholder="0.00"></label>' +
+        '<label class="campo"><span>% de su adeudo</span><input id="rc-pct" inputmode="numeric" placeholder="ej. 10"></label></div>' +
+      '<p class="tenue" id="rc-calc" style="margin:0 0 8px"></p>' +
+      '<label class="campo"><span>Detalle (opcional)</span><input id="rc-detalle" placeholder="Ej. 15 días de atraso"></label>' +
+      '<button class="btn lleno peligro" id="rc-ok">Aplicar recargo</button>' +
+      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+    const calc = () => {
+      const pct = Number($("#rc-pct").value || 0);
+      if (pct > 0 && debe > 0) { const m = Math.round(debe * pct / 100 * 100) / 100; $("#rc-monto").value = m; $("#rc-calc").textContent = pct + "% de " + dinero(debe) + " = " + dinero(m); }
+      else $("#rc-calc").textContent = "";
+    };
+    $("#rc-pct").oninput = calc;
+    $("#rc-ok").onclick = async () => {
+      const monto = Number($("#rc-monto").value || 0);
+      if (monto <= 0) return aviso("Pon el monto del recargo", "mal");
+      try {
+        const pin = await pedirPin("aplicar el recargo");
+        if (!pin) return;
+        const r = await rpc("admin_cargo", { p_token: E.token, p_usuario: b.dataset.recargo, p_pin_hash: pin,
+          p_datos: { concepto: $("#rc-concepto").value, detalle: $("#rc-detalle").value, monto, ref: "RECARGO" } });
+        if (!r.ok) throw new Error(r.motivo);
+        cerrarHoja(); aviso("Recargo de " + dinero(monto) + " aplicado", "bien"); pintar();
+      } catch (err) { aviso(err.message, "mal"); }
+    };
   });
   $$("[data-poslocal]").forEach(b => b.onclick = async () => {
     const id = b.dataset.poslocal;
