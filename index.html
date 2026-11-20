@@ -2301,7 +2301,7 @@ function clienteMoroso(id) { return listaMorosos().includes(id); }
 /* ===== Área LOCAL: venta privada que solo ven clientes autorizados ===== */
 function ESPACIO_LOCAL() { return (E.config && E.config.espacio_local) || "Local"; }
 /* Nombre comercial de esa tienda (editable en Ajustes) */
-function NEGOCIO_LOCAL() { return (E.config && E.config.negocio_local) || "La Bodeguita de IZMA e ISIS"; }
+function NEGOCIO_LOCAL() { return (E.config && E.config.negocio_local) || "LOCAL IZMA"; }
 /* Nombre comercial de la tienda LOCAL (para títulos y secciones) */
 function NOMBRE_LOCAL() { return NEGOCIO_LOCAL(); }
 function esProductoLocal(p) {
@@ -2331,7 +2331,7 @@ const MENUS = {
   vendedor: [["ventas", "Mis ventas"], ["publicar", "Subir producto"], ["inventario", "Lo que subí"],
              ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
   admin: [["resumen", "Resumen"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
-          ["almacen", "Bodega"], ["tienda_local", "La Bodeguita"], ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
+          ["almacen", "Bodega"], ["tienda_local", "LOCAL IZMA"], ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
           ["usuarios", "Clientes"], ["equipo", "Equipo"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"], ["cuenta", "Mi cuenta"]]
 };
 function saludo(frase) {
@@ -4103,7 +4103,7 @@ async function pantallaUsuarios(area) {
   const lista = edoFiltro ? d.items.filter(u => estadoDe(u) === edoFiltro) : d.items;
   $("#vista").innerHTML =
     (mapa ? bloqueMapa(mapa, edoFiltro) : "") +
-    (esEquipo ? '<div class="mensaje info" style="margin-top:0">Alta y administración de <b>administradores y vendedores</b>. Las vendedoras de La Bodeguita se dan de alta en su propia sección.</div>' : "") +
+    (esEquipo ? '<div class="mensaje info" style="margin-top:0">Alta y administración de <b>administradores y vendedores</b>. Las vendedoras de ' + esc(NEGOCIO_LOCAL()) + ' se dan de alta en su propia sección.</div>' : "") +
     '<div class="fila entre envolver" style="margin-bottom:12px">' +
       '<div class="filtros" style="margin:0">' +
         filtros.map(r => '<button data-r="' + r[0] + '" aria-current="' + (filtro === r[0]) + '">' + r[1] + "</button>").join("") +
