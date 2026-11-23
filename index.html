@@ -36,6 +36,13 @@ body{background:var(--fondo);color:var(--tinta);font:400 15px/1.5 Inter,system-u
 .interruptor input:checked + .pista{background:var(--verde)}
 .interruptor input:checked + .pista::after{transform:translateX(20px)}
 .panel-op{border-radius:14px;padding:12px 14px;margin-top:8px;border:1px solid var(--linea)}
+.mas-acc{margin-top:8px}
+.mas-acc>summary{cursor:pointer;color:var(--verde);font-weight:600;font-size:14px;list-style:none;padding:7px 10px;border:1px dashed var(--linea);border-radius:999px;display:inline-block}
+.mas-acc>summary::-webkit-details-marker{display:none}
+.mas-acc>summary::before{content:"⋯ "}
+.mas-acc[open]>summary{color:var(--tinta-2);margin-bottom:6px}
+.mas-acc[open]>summary::before{content:"▾ "}
+.mas-acc .fila{margin-top:6px}
 .acceso{flex-direction:column;gap:6px}
 .acceso .logo-grande{width:min(230px,62vw);aspect-ratio:460/402;background:var(--logo) center/contain no-repeat;margin:0 auto;filter:drop-shadow(0 8px 22px rgba(0,0,0,.5))}
 #app{position:relative}
@@ -2297,6 +2304,10 @@ function listaZonaExt() { const l = E.config && E.config.zona_ext; return Array.
 function clienteZonaExt(id) { return listaZonaExt().includes(id); }
 function listaMorosos() { const l = E.config && E.config.morosos; return Array.isArray(l) ? l : []; }
 function clienteMoroso(id) { return listaMorosos().includes(id); }
+function listaContado() { const l = E.config && E.config.contado; return Array.isArray(l) ? l : []; }
+function clienteContado(id) { return listaContado().includes(id); }
+function listaConfianza() { const l = E.config && E.config.confianza; return Array.isArray(l) ? l : []; }
+function clienteConfianza(id) { return listaConfianza().includes(id); }
 
 /* ===== Área LOCAL: venta privada que solo ven clientes autorizados ===== */
 function ESPACIO_LOCAL() { return (E.config && E.config.espacio_local) || "Local"; }
@@ -4115,6 +4126,8 @@ async function pantallaUsuarios(area) {
       return '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(u.nombre) + "</h3>" +
         '<div class="fila" style="gap:6px">' +
         (u.rol === "cliente" && clienteMoroso(u.id) ? '<span class="sello rojo">⚠ Moroso</span>' : "") +
+        (u.rol === "cliente" && clienteContado(u.id) ? '<span class="sello verde">💵 De contado</span>' : "") +
+        (u.rol === "cliente" && clienteConfianza(u.id) ? '<span class="sello kraft">⭐ De confianza</span>' : "") +
         (u.rol === "cliente" && clienteZonaExt(u.id) ? '<span class="sello kraft">📦 Zona extendida</span>' : "") +
         '<span class="sello ' + (u.estado === "activo" ? "verde" : "rojo") + '">' + esc(u.estado) + "</span></div></div>" +
         '<p class="tenue" style="margin:4px 0">' + esc(u.usuario) + " · " + esc(u.rol) +
@@ -4123,30 +4136,44 @@ async function pantallaUsuarios(area) {
         (u.rol === "cliente"
           ? '<div class="fila entre linea-arriba"><span>' + (debe ? "Debe" : "Saldo a favor") + "</span>" +
             '<span class="cifra num" style="' + (debe ? "color:var(--sello)" : "") + '">' + dinero(Math.abs(u.saldo)) + "</span></div>" +
-            '<p class="tenue" style="margin:2px 0 0">Crédito autorizado ' + dinero(u.limite_credito || 0) +
+            '<p class="tenue" style="margin:2px 0 0">' +
+              (clienteContado(u.id) ? "💵 De contado (no usa crédito)"
+                : clienteConfianza(u.id) ? "⭐ Crédito ilimitado (cliente de confianza)"
+                : "Crédito autorizado " + dinero(u.limite_credito || 0)) +
             " · " + u.pedidos + " compras · " + dinero(u.comprado) + " comprado</p>"
           : "") +
         '<p class="tenue" style="margin:2px 0 0">' + (u.ultimo_acceso ? "Entró " + fecha(u.ultimo_acceso) : "Nunca ha entrado") + "</p>" +
-        '<div class="fila envolver linea-arriba">' +
-          (u.rol === "cliente"
-            ? '<button class="btn chico" data-saldo="' + u.id + '" data-nombre="' + esc(u.nombre) + '">Ajustar saldo</button>' +
+        (() => {
+          const bEditar = '<button class="btn claro chico" data-editar-u="' + u.id + '">Editar</button>';
+          const bPin = '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>';
+          const bEstado = '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
+            (u.estado === "activo" ? "Suspender" : "Reactivar") + "</button>";
+          const bElim = (ELIMINAR_ACTIVO && u.id !== E.yo.id ? '<button class="btn claro chico peligro" data-eliminar="' + u.id + '" data-nombre="' + esc(u.nombre) +
+            '" data-usuario="' + esc(u.usuario) + '" data-saldo="' + (u.saldo || 0) + '">Eliminar</button>' : "");
+          if (u.rol !== "cliente") {
+            return '<div class="fila envolver linea-arriba">' + bEditar + bPin + bEstado + bElim + "</div>";
+          }
+          const secundarias =
+            '<button class="btn ' + (clienteConfianza(u.id) ? "kraft" : "claro") + ' chico" data-confianza="' + u.id + '" data-nombre="' + esc(u.nombre) + '">' +
+              (clienteConfianza(u.id) ? "⭐ De confianza" : "Marcar de confianza") + "</button>" +
+            '<button class="btn ' + (clienteContado(u.id) ? "verde" : "claro") + ' chico" data-contado="' + u.id + '" data-nombre="' + esc(u.nombre) + '">' +
+              (clienteContado(u.id) ? "💵 De contado" : "Marcar de contado") + "</button>" +
+            '<button class="btn claro chico" data-recargo="' + u.id + '" data-nombre="' + esc(u.nombre) + '" data-rsaldo="' + (u.saldo || 0) + '">Recargo</button>' +
+            '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' +
+            '<button class="btn ' + (clienteVeLocal(u.id) ? "verde" : "claro") + ' chico" data-local="' + u.id +
+              '" data-nombre="' + esc(u.nombre) + '">' + (clienteVeLocal(u.id) ? "✓ Ve " + esc(ESPACIO_LOCAL().toUpperCase()) : "Dar " + esc(ESPACIO_LOCAL().toUpperCase())) + "</button>" +
+            '<button class="btn ' + (clienteZonaExt(u.id) ? "kraft" : "claro") + ' chico" data-zonaext="' + u.id +
+              '" data-nombre="' + esc(u.nombre) + '">' + (clienteZonaExt(u.id) ? "📦 Zona extendida" : "Marcar zona extendida") + "</button>" +
+            '<button class="btn ' + (clienteMoroso(u.id) ? "peligro" : "claro") + ' chico" data-moroso="' + u.id +
+              '" data-nombre="' + esc(u.nombre) + '">' + (clienteMoroso(u.id) ? "⚠ Moroso" : "Marcar moroso") + "</button>" +
+            bEditar + bPin + bEstado + bElim;
+          return '<div class="fila envolver linea-arriba">' +
+              '<button class="btn chico" data-saldo="' + u.id + '" data-nombre="' + esc(u.nombre) + '">Ajustar saldo</button>' +
               '<button class="btn kraft chico" data-gasto="' + u.id + '" data-nombre="' + esc(u.nombre) + '">Cobrar gasto</button>' +
-              '<button class="btn claro chico" data-limite="' + u.id + '" data-valor="' + (u.limite_credito || 0) + '">Crédito</button>' : "") +
-          (u.rol === "cliente" ? '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' : "") +
-          (u.rol === "cliente" ? '<button class="btn ' + (clienteVeLocal(u.id) ? "verde" : "claro") + ' chico" data-local="' + u.id +
-            '" data-nombre="' + esc(u.nombre) + '">' + (clienteVeLocal(u.id) ? "✓ Ve " + esc(ESPACIO_LOCAL().toUpperCase()) : "Dar " + esc(ESPACIO_LOCAL().toUpperCase())) + "</button>" : "") +
-          (u.rol === "cliente" ? '<button class="btn ' + (clienteZonaExt(u.id) ? "kraft" : "claro") + ' chico" data-zonaext="' + u.id +
-            '" data-nombre="' + esc(u.nombre) + '">' + (clienteZonaExt(u.id) ? "📦 Zona extendida" : "Marcar zona extendida") + "</button>" : "") +
-          (u.rol === "cliente" ? '<button class="btn ' + (clienteMoroso(u.id) ? "peligro" : "claro") + ' chico" data-moroso="' + u.id +
-            '" data-nombre="' + esc(u.nombre) + '">' + (clienteMoroso(u.id) ? "⚠ Moroso" : "Marcar moroso") + "</button>" : "") +
-          (u.rol === "cliente" ? '<button class="btn claro chico" data-recargo="' + u.id + '" data-nombre="' + esc(u.nombre) + '" data-rsaldo="' + (u.saldo || 0) + '">Recargo</button>' : "") +
-          '<button class="btn claro chico" data-editar-u="' + u.id + '">Editar</button>' +
-          '<button class="btn claro chico" data-pin="' + u.id + '" data-usuario="' + esc(u.usuario) + '">Reiniciar PIN</button>' +
-          '<button class="btn claro chico" data-estado="' + u.id + '" data-valor="' + (u.estado === "activo" ? "suspendido" : "activo") + '">' +
-            (u.estado === "activo" ? "Suspender" : "Reactivar") + "</button>" +
-          (ELIMINAR_ACTIVO && u.id !== E.yo.id ? '<button class="btn claro chico peligro" data-eliminar="' + u.id + '" data-nombre="' + esc(u.nombre) +
-            '" data-usuario="' + esc(u.usuario) + '" data-saldo="' + (u.saldo || 0) + '">Eliminar</button>' : "") +
-          "</div></div>";
+              '<button class="btn claro chico" data-limite="' + u.id + '" data-valor="' + (u.limite_credito || 0) + '">Crédito</button>' +
+            "</div>" +
+            '<details class="mas-acc"><summary>Más opciones</summary><div class="fila envolver">' + secundarias + "</div></details>";
+        })() + "</div>";
   }
   function tarjetasUsuarios(arr) {
     return arr.map(tarjetaUsuario).join("") || '<div class="vacio"><h3>Nadie aquí todavía</h3></div>';
@@ -4188,6 +4215,30 @@ async function pantallaUsuarios(area) {
       if (!r.ok) throw new Error(r.motivo);
       E.config = r.config; if (!Array.isArray(E.config.morosos)) E.config.morosos = nueva;
       aviso(nueva.includes(id) ? b.dataset.nombre + ": marcado como MOROSO" : b.dataset.nombre + ": ya no es moroso", "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-contado]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.contado;
+    const contado = listaContado().includes(id) ? listaContado().filter(x => x !== id) : [...listaContado(), id];
+    const confianza = listaConfianza().filter(x => x !== id);   // contado y confianza no van juntas
+    try {
+      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { contado, confianza } });
+      if (!r.ok) throw new Error(r.motivo);
+      E.config = r.config; if (!Array.isArray(E.config.contado)) E.config.contado = contado;
+      aviso(contado.includes(id) ? b.dataset.nombre + ": de contado (no usa crédito)" : b.dataset.nombre + ": vuelve a crédito normal", "bien");
+      pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  });
+  $$("[data-confianza]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.confianza;
+    const confianza = listaConfianza().includes(id) ? listaConfianza().filter(x => x !== id) : [...listaConfianza(), id];
+    const contado = listaContado().filter(x => x !== id);   // confianza quita "de contado"
+    try {
+      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { confianza, contado } });
+      if (!r.ok) throw new Error(r.motivo);
+      E.config = r.config; if (!Array.isArray(E.config.confianza)) E.config.confianza = confianza;
+      aviso(confianza.includes(id) ? b.dataset.nombre + ": cliente de confianza, crédito ilimitado" : b.dataset.nombre + ": vuelve a crédito con tope", "bien");
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
   });
