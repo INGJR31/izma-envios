@@ -4123,7 +4123,10 @@ async function pantallaUsuarios(area) {
 
   function tarjetaUsuario(u) {
       const debe = u.saldo < 0;
-      return '<div class="tarjeta"><div class="fila entre envolver"><h3 style="margin:0">' + esc(u.nombre) + "</h3>" +
+      return '<div class="tarjeta"><div class="fila entre envolver">' +
+        (u.rol === "cliente"
+          ? '<h3 style="margin:0;cursor:pointer" data-perfil="' + u.id + '">' + esc(u.nombre) + ' <span style="color:var(--verde);font-size:15px">› ver perfil</span></h3>'
+          : '<h3 style="margin:0">' + esc(u.nombre) + "</h3>") +
         '<div class="fila" style="gap:6px">' +
         (u.rol === "cliente" && clienteMoroso(u.id) ? '<span class="sello rojo">⚠ Moroso</span>' : "") +
         (u.rol === "cliente" && clienteContado(u.id) ? '<span class="sello verde">💵 De contado</span>' : "") +
@@ -4313,6 +4316,7 @@ async function pantallaUsuarios(area) {
     };
   });
   $$("[data-ficha]").forEach(b => b.onclick = () => { E.datos.ficha = b.dataset.ficha; ir("cliente"); });
+  $$("[data-perfil]").forEach(b => b.onclick = () => { E.datos.ficha = b.dataset.perfil; ir("cliente"); });
   $$("[data-editar-u]").forEach(b => b.onclick = () => {
     const u = d.items.find(x => x.id === b.dataset.editarU);
     hoja("<h2>Editar a " + esc(u.nombre) + "</h2>" +
