@@ -4164,7 +4164,7 @@ async function pantallaUsuarios(area) {
             '<button class="btn claro chico" data-recargo="' + u.id + '" data-nombre="' + esc(u.nombre) + '" data-rsaldo="' + (u.saldo || 0) + '">Recargo</button>' +
             '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' +
             '<button class="btn ' + (clienteVeLocal(u.id) ? "verde" : "claro") + ' chico" data-local="' + u.id +
-              '" data-nombre="' + esc(u.nombre) + '">' + (clienteVeLocal(u.id) ? "✓ Ve " + esc(ESPACIO_LOCAL().toUpperCase()) : "Dar " + esc(ESPACIO_LOCAL().toUpperCase())) + "</button>" +
+              '" data-nombre="' + esc(u.nombre) + '">' + esc(ESPACIO_LOCAL().toUpperCase()) + (clienteVeLocal(u.id) ? " · ON ✓" : " · OFF") + "</button>" +
             '<button class="btn ' + (clienteZonaExt(u.id) ? "kraft" : "claro") + ' chico" data-zonaext="' + u.id +
               '" data-nombre="' + esc(u.nombre) + '">' + (clienteZonaExt(u.id) ? "📦 Zona extendida" : "Marcar zona extendida") + "</button>" +
             '<button class="btn ' + (clienteMoroso(u.id) ? "peligro" : "claro") + ' chico" data-moroso="' + u.id +
