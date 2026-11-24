@@ -2826,7 +2826,7 @@ VISTAS.tienda_local = async () => {
           '<div class="tenue">' + esc(v.usuario) + (v.telefono ? " · " + esc(v.telefono) : "") + " · " +
             (v.ultimo_acceso ? "entró " + fecha(v.ultimo_acceso) : "nunca ha entrado") + "</div></div>" +
           '<div class="fila envolver" style="justify-content:flex-end">' +
-            '<button class="btn claro chico" data-vercomo="' + v.id + '" data-comorol="vendedora">👁 Ver como vendedora</button>' +
+            (E.yo && E.yo.rol === "admin" ? '<button class="btn claro chico" data-vercomo="' + v.id + '" data-comorol="vendedora">👁 Ver como vendedora</button>' : "") +
             '<button class="btn claro chico" data-vend-pin="' + v.id + '" data-usuario="' + esc(v.usuario) + '">Reiniciar PIN</button>' +
             '<button class="btn claro chico peligro" data-vend-quita="' + v.id + '" data-nombre="' + esc(v.nombre) + '">Quitar</button></div></div>').join("")
           : '<p class="tenue" style="margin:0">Aún no hay vendedoras. Toca “Alta vendedora”.</p>') + "</div>"
@@ -4249,7 +4249,7 @@ async function pantallaUsuarios(area) {
               "💵 De contado" + (clienteContado(u.id) ? " · ON ✓" : " · OFF") + "</button>" +
             '<button class="btn claro chico" data-recargo="' + u.id + '" data-nombre="' + esc(u.nombre) + '" data-rsaldo="' + (u.saldo || 0) + '">Recargo</button>' +
             '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' +
-            '<button class="btn claro chico" data-vercomo="' + u.id + '" data-comorol="cliente">👁 Ver como cliente</button>' +
+            (E.yo && E.yo.rol === "admin" ? '<button class="btn claro chico" data-vercomo="' + u.id + '" data-comorol="cliente">👁 Ver como cliente</button>' : "") +
             '<button class="btn ' + (clienteVeLocal(u.id) ? "verde" : "claro") + ' chico" data-local="' + u.id +
               '" data-nombre="' + esc(u.nombre) + '">' + esc(ESPACIO_LOCAL().toUpperCase()) + (clienteVeLocal(u.id) ? " · ON ✓" : " · OFF") + "</button>" +
             '<button class="btn ' + (clienteZonaExt(u.id) ? "kraft" : "claro") + ' chico" data-zonaext="' + u.id +
