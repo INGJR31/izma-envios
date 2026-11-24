@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-b</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-c</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-b</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-c</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -2355,6 +2355,7 @@ function listaPosLocal() {
 function esVendedoraLocal(id) { return listaPosLocal().includes(id); }
 function yoSoyPosLocal() { return E.yo && E.yo.rol === "vendedor" && E.yo.tipo_cliente === "local"; }
 function esVendLocalU(u) { return u && u.rol === "vendedor" && u.tipo_cliente === "local"; }
+function colorEspacio(s) { s = String(s || "—"); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; return "hsl(" + h + ",65%,42%)"; }
 
 const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"],
@@ -4084,15 +4085,31 @@ VISTAS.productos = async () => {
     '<div class="filtros"><button data-arch="0" aria-current="' + (!arch) + '">En bodega</button>' +
       '<button data-arch="1" aria-current="' + arch + '">Archivados de ventas cerradas</button></div>' +
     (arch ? '<div class="mensaje info">Mercancía de jornadas ya cerradas. Queda solo de historial, los clientes no la ven.</div>' : "") +
-    '<div class="rejilla">' + (d.items.map(p => {
+    (() => {
+      const espacios = [...new Set(d.items.map(p => (p.origen || "—").trim()).filter(Boolean))].sort();
+      if (espacios.length < 2) return "";
+      const sel = E.datos.filtroEspacio || "";
+      return '<div class="filtros" style="margin-bottom:10px">' +
+        '<button data-esp="" aria-current="' + (sel === "") + '">Todos (' + d.items.length + ")</button>" +
+        espacios.map(e => {
+          const n = d.items.filter(p => (p.origen || "—").trim() === e).length;
+          return '<button data-esp="' + esc(e) + '" aria-current="' + (sel === e) + '" ' +
+            'style="border-left:10px solid ' + colorEspacio(e) + '">' + esc(e) + " (" + n + ")</button>";
+        }).join("") + "</div>";
+    })() +
+    '<div class="rejilla">' + (d.items
+      .filter(p => !E.datos.filtroEspacio || (p.origen || "—").trim() === E.datos.filtroEspacio)
+      .map(p => {
       const m = (p.media || [])[0];
-      return '<article class="pieza"><div class="lienzo">' +
+      const col = colorEspacio((p.origen || "—").trim());
+      return '<article class="pieza" style="border-left:6px solid ' + col + '"><div class="lienzo">' +
         (m ? (m.tipo === "video"
           ? '<video src="' + esc(m.url) + '" muted playsinline preload="metadata"></video>'
           : '<img src="' + esc(m.url) + '" alt="" loading="lazy">') : "") +
         '<span class="cinta">' + esc(p.estado) + "</span></div>" +
         '<div class="cuerpo"><div class="titulo">' + esc(p.titulo) + "</div>" +
-          '<div class="tenue">Subió: ' + esc(p.vendedor) + " · " + esc(p.origen || "—") + "</div>" +
+          '<div class="tenue">Subió: ' + esc(p.vendedor) + " · " +
+            '<span style="display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-weight:600;background:' + col + '">' + esc(p.origen || "—") + "</span></div>" +
           '<div class="fila envolver">' +
             '<span class="sello verde num">' + p.disponible + " en existencia</span>" +
             '<span class="sello kraft num">' + p.apartados + " apartadas</span>" +
@@ -4103,6 +4120,7 @@ VISTAS.productos = async () => {
   $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
   $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
   $$("[data-arch]").forEach(b => b.onclick = () => { E.datos.verArchivados = b.dataset.arch === "1"; pintar(); });
+  $$("[data-esp]").forEach(b => b.onclick = () => { E.datos.filtroEspacio = b.dataset.esp; pintar(); });
   enlazarEditar(d.items);
 };
 
