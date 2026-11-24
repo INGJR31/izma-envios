@@ -264,8 +264,9 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <button class="btn lleno" type="submit">Entrar</button>
       <p class="tenue" style="margin:14px 0 0">¿No tienes usuario? Solicita acceso y IZMA te lo manda por WhatsApp.</p>
       <div id="claves-demo"></div>
+      <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-a</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-b</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -304,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-a</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-b</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -2444,6 +2445,43 @@ async function volverAdmin() {
   } catch {}
   arrancarApp();
 }
+function abrirEditarUsuario(u) {
+  hoja("<h2>Editar a " + esc(u.nombre) + "</h2>" +
+    '<p class="tenue" style="margin-top:0">Usuario <b>' + esc(u.usuario) + "</b> · " + esc(u.rol) +
+      ". El usuario no se cambia; si se equivocaron, crea otro y suspende este.</p>" +
+    '<label class="campo"><span>Nombre</span><input id="ed-nombre" value="' + esc(u.nombre || "") + '"></label>' +
+    '<div class="dos">' +
+      '<label class="campo"><span>WhatsApp</span><input id="ed-tel" value="' + esc(u.telefono || "") + '"></label>' +
+      '<label class="campo"><span>Ciudad</span><input id="ed-ciudad" value="' + esc(u.ciudad || "") + '"></label></div>' +
+    (u.rol === "cliente"
+      ? '<div class="dos">' +
+          '<label class="campo"><span>Tipo de cliente</span><select id="ed-tipo">' +
+            '<option value="local"' + (u.tipo_cliente === "local" ? " selected" : "") + ">Local</option>" +
+            '<option value="foraneo"' + (u.tipo_cliente === "foraneo" ? " selected" : "") + ">Foráneo</option></select></label>" +
+          '<label class="campo"><span>Estado</span><select id="ed-edo">' + OPCIONES_ESTADO(u.estado_mx || "") + "</select></label></div>" +
+        '<label class="campo"><span>Paquetería</span><input id="ed-paq" value="' + esc(u.paqueteria || "") + '"></label>' +
+        '<label class="campo"><span>Dirección de envío</span><textarea id="ed-dir">' + esc(u.direccion || "") + "</textarea></label>"
+      : "") +
+    '<label class="campo"><span>Nota interna (no la ve el cliente)</span><input id="ed-notas" value="' + esc(u.notas || "") + '"></label>' +
+    '<div class="mensaje info">El saldo y el crédito se cambian con sus botones, para que quede el movimiento registrado.</div>' +
+    '<button class="btn lleno verde" id="ed-ok">Guardar cambios</button>' +
+    '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
+  $("#ed-ok").onclick = async () => {
+    const datos = { nombre: $("#ed-nombre").value, telefono: $("#ed-tel").value,
+                    ciudad: $("#ed-ciudad").value, notas: $("#ed-notas").value };
+    if ($("#ed-tipo")) {
+      datos.tipo_cliente = $("#ed-tipo").value;
+      datos.estado_mx = $("#ed-edo").value;
+      datos.paqueteria = $("#ed-paq").value;
+      datos.direccion = $("#ed-dir").value;
+    }
+    try {
+      const r = await rpc("admin_editar_usuario", { p_token: E.token, p_id: u.id, p_datos: datos });
+      if (!r.ok) throw new Error(r.motivo);
+      cerrarHoja(); aviso("Datos actualizados", "bien"); pintar();
+    } catch (err) { aviso(err.message, "mal"); }
+  };
+}
 function pintarBannerPreview() {
   let bar = document.getElementById("preview-bar");
   if (E.previendo) {
@@ -2827,6 +2865,7 @@ VISTAS.tienda_local = async () => {
             (v.ultimo_acceso ? "entró " + fecha(v.ultimo_acceso) : "nunca ha entrado") + "</div></div>" +
           '<div class="fila envolver" style="justify-content:flex-end">' +
             (E.yo && E.yo.rol === "admin" ? '<button class="btn claro chico" data-vercomo="' + v.id + '" data-comorol="vendedora">👁 Ver como vendedora</button>' : "") +
+            '<button class="btn claro chico" data-vend-editar="' + v.id + '">Editar</button>' +
             '<button class="btn claro chico" data-vend-pin="' + v.id + '" data-usuario="' + esc(v.usuario) + '">Reiniciar PIN</button>' +
             '<button class="btn claro chico peligro" data-vend-quita="' + v.id + '" data-nombre="' + esc(v.nombre) + '">Quitar</button></div></div>').join("")
           : '<p class="tenue" style="margin:0">Aún no hay vendedoras. Toca “Alta vendedora”.</p>') + "</div>"
@@ -2835,6 +2874,10 @@ VISTAS.tienda_local = async () => {
 
   $$("[data-tl]").forEach(b => b.onclick = () => { E.datos.tlTab = b.dataset.tl; pintar(); });
   $$("[data-vercomo]").forEach(b => b.onclick = () => verComo(b.dataset.vercomo, b.dataset.comorol));
+  $$("[data-vend-editar]").forEach(b => b.onclick = () => {
+    const v = (vendedoras || []).find(x => x.id === b.dataset.vendEditar);
+    if (v) abrirEditarUsuario(v);
+  });
   if ($("#tl-crear-vend")) $("#tl-crear-vend").onclick = () => crearVendedoraLocal();
   $$("[data-vend-quita]").forEach(b => b.onclick = async () => {
     if (!confirm("¿Quitar a " + b.dataset.nombre + " como vendedora de la tienda? Su cuenta se conserva, solo deja de ser punto de venta.")) return;
@@ -4403,41 +4446,7 @@ async function pantallaUsuarios(area) {
   $$("[data-perfil]").forEach(b => b.onclick = () => { E.datos.ficha = b.dataset.perfil; ir("cliente"); });
   $$("[data-editar-u]").forEach(b => b.onclick = () => {
     const u = d.items.find(x => x.id === b.dataset.editarU);
-    hoja("<h2>Editar a " + esc(u.nombre) + "</h2>" +
-      '<p class="tenue" style="margin-top:0">Usuario <b>' + esc(u.usuario) + "</b> · " + esc(u.rol) +
-        ". El usuario no se cambia; si se equivocaron, crea otro y suspende este.</p>" +
-      '<label class="campo"><span>Nombre</span><input id="ed-nombre" value="' + esc(u.nombre || "") + '"></label>' +
-      '<div class="dos">' +
-        '<label class="campo"><span>WhatsApp</span><input id="ed-tel" value="' + esc(u.telefono || "") + '"></label>' +
-        '<label class="campo"><span>Ciudad</span><input id="ed-ciudad" value="' + esc(u.ciudad || "") + '"></label></div>' +
-      (u.rol === "cliente"
-        ? '<div class="dos">' +
-            '<label class="campo"><span>Tipo de cliente</span><select id="ed-tipo">' +
-              '<option value="local"' + (u.tipo_cliente === "local" ? " selected" : "") + ">Local</option>" +
-              '<option value="foraneo"' + (u.tipo_cliente === "foraneo" ? " selected" : "") + ">Foráneo</option></select></label>" +
-            '<label class="campo"><span>Estado</span><select id="ed-edo">' + OPCIONES_ESTADO(u.estado_mx || "") + "</select></label></div>" +
-          '<label class="campo"><span>Paquetería</span><input id="ed-paq" value="' + esc(u.paqueteria || "") + '"></label>' +
-          '<label class="campo"><span>Dirección de envío</span><textarea id="ed-dir">' + esc(u.direccion || "") + "</textarea></label>"
-        : "") +
-      '<label class="campo"><span>Nota interna (no la ve el cliente)</span><input id="ed-notas" value="' + esc(u.notas || "") + '"></label>' +
-      '<div class="mensaje info">El saldo y el crédito se cambian con sus botones, para que quede el movimiento registrado.</div>' +
-      '<button class="btn lleno verde" id="ed-ok">Guardar cambios</button>' +
-      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
-    $("#ed-ok").onclick = async () => {
-      const datos = { nombre: $("#ed-nombre").value, telefono: $("#ed-tel").value,
-                      ciudad: $("#ed-ciudad").value, notas: $("#ed-notas").value };
-      if ($("#ed-tipo")) {
-        datos.tipo_cliente = $("#ed-tipo").value;
-        datos.estado_mx = $("#ed-edo").value;
-        datos.paqueteria = $("#ed-paq").value;
-        datos.direccion = $("#ed-dir").value;
-      }
-      try {
-        const r = await rpc("admin_editar_usuario", { p_token: E.token, p_id: u.id, p_datos: datos });
-        if (!r.ok) throw new Error(r.motivo);
-        cerrarHoja(); aviso("Datos actualizados", "bien"); pintar();
-      } catch (err) { aviso(err.message, "mal"); }
-    };
+    if (u) abrirEditarUsuario(u);
   });
   $$("[data-gasto]").forEach(b => b.onclick = () => {
     hoja("<h2>Cobrar gasto extra</h2>" +
@@ -5532,6 +5541,42 @@ function fallo(msj) {
 }
 window.addEventListener("error", e => fallo(e.message || "Error inesperado"));
 window.addEventListener("unhandledrejection", e => fallo((e.reason && e.reason.message) || "Error inesperado"));
+
+/* ===================== 15. instalar app (PWA) ===================== */
+let promptInstalar = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptInstalar = e; });
+function yaInstalada() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+async function instalarApp() {
+  if (yaInstalada()) { aviso("La app ya está instalada en este dispositivo ✓", "bien"); return; }
+  if (promptInstalar) {
+    promptInstalar.prompt();
+    try { await promptInstalar.userChoice; } catch {}
+    promptInstalar = null;
+    return;
+  }
+  const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  hoja("<h2>📲 Instalar IZMA en tu celular</h2>" +
+    (esIOS
+      ? '<div class="mensaje info">En iPhone/iPad (Safari):</div>' +
+        '<ol style="line-height:1.9;padding-left:20px">' +
+          "<li>Toca el botón <b>Compartir</b> (el cuadrito con la flecha ↑, abajo).</li>" +
+          "<li>Baja y toca <b>“Agregar a inicio”</b>.</li>" +
+          "<li>Toca <b>Agregar</b>. ¡Listo! Queda el ícono de IZMA en tu pantalla.</li>" +
+        "</ol>"
+      : '<div class="mensaje info">En Android (Chrome):</div>' +
+        '<ol style="line-height:1.9;padding-left:20px">' +
+          "<li>Toca el menú <b>⋮</b> (arriba a la derecha).</li>" +
+          "<li>Toca <b>“Instalar aplicación”</b> o <b>“Agregar a pantalla principal”</b>.</li>" +
+          "<li>Confirma. ¡Listo! Queda el ícono de IZMA y abre como app.</li>" +
+        "</ol>") +
+    '<button class="btn lleno verde" data-cerrar>Entendido</button>');
+}
+if ($("#btn-instalar")) {
+  if (yaInstalada()) $("#btn-instalar").style.display = "none";
+  $("#btn-instalar").onclick = instalarApp;
+}
 
 /* ===================== 15. arranque ===================== */
 (async () => {
