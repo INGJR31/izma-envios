@@ -4154,7 +4154,11 @@ async function pantallaUsuarios(area) {
           const bElim = (ELIMINAR_ACTIVO && u.id !== E.yo.id ? '<button class="btn claro chico peligro" data-eliminar="' + u.id + '" data-nombre="' + esc(u.nombre) +
             '" data-usuario="' + esc(u.usuario) + '" data-saldo="' + (u.saldo || 0) + '">Eliminar</button>' : "");
           if (u.rol !== "cliente") {
-            return '<div class="fila envolver linea-arriba">' + bEditar + bPin + bEstado + bElim + "</div>";
+            const bPos = (u.rol === "vendedor"
+              ? '<button class="btn ' + (esVendedoraLocal(u.id) ? "verde" : "claro") + ' chico" data-poslocal="' + u.id +
+                '" data-nombre="' + esc(u.nombre) + '">' + esc(ESPACIO_LOCAL().toUpperCase()) + (esVendedoraLocal(u.id) ? " · ON ✓" : " · OFF") + "</button>"
+              : "");
+            return '<div class="fila envolver linea-arriba">' + bPos + bEditar + bPin + bEstado + bElim + "</div>";
           }
           const secundarias =
             '<button class="btn ' + (clienteConfianza(u.id) ? "kraft" : "claro") + ' chico" data-confianza="' + u.id + '" data-nombre="' + esc(u.nombre) + '">' +
