@@ -4129,6 +4129,8 @@ async function pantallaUsuarios(area) {
   if (esEquipo) {
     // El Equipo no muestra las vendedoras de La Bodeguita (esas van en su sección)
     if (filtro === "") d.items = d.items.filter(u => u.rol === "vendedor" || u.rol === "admin");
+    // Las vendedoras de LOCAL IZMA NO se mezclan en Equipo: viven en su propia área.
+    d.items = d.items.filter(u => !esVendLocalU(u));
   } else {
     d.items = d.items.filter(u => u.rol === "cliente");
   }
