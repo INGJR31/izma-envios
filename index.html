@@ -900,6 +900,16 @@ const LOCAL = {
     const u = usuarioDe(p_token);
     return u ? { ok: true, usuario: uJson(u), config: Object.assign({}, BD.config) } : { ok: false };
   },
+  admin_entrar_como({ p_token, p_id }) {
+    exige(p_token, ["admin"]);
+    const u = BD.usuarios.find(x => x.id === p_id);
+    if (!u) return { ok: false, motivo: "No existe" };
+    if (u.estado !== "activo") return { ok: false, motivo: "Esa cuenta está suspendida" };
+    const token = uid() + uid();
+    BD.sesiones.push({ token, usuario_id: u.id });
+    guardarBD();
+    return { ok: true, token };
+  },
   salir({ p_token }) { BD.sesiones = BD.sesiones.filter(s => s.token !== p_token); guardarBD(); return { ok: true }; },
   cambiar_pin({ p_token, p_pin_hash_nuevo, p_pin_hash_actual }) {
     const u = exige(p_token);
@@ -2409,12 +2419,55 @@ async function pedirPin(para) {
   if (!pin.trim()) { aviso("Necesitas tu PIN para confirmar", "mal"); return null; }
   return await hashPin(E.yo.usuario, pin);
 }
+async function verComo(id, etiqueta) {
+  try {
+    const r = await rpc("admin_entrar_como", { p_token: E.token, p_id: id });
+    if (!r.ok) throw new Error(r.motivo || "No se pudo entrar");
+    // Guardar mi sesión de admin para poder volver
+    E.adminToken = E.token;
+    E.adminNombre = E.yo ? E.yo.nombre : "admin";
+    E.previendo = etiqueta || "usuario";
+    E.token = r.token;
+    const s = await rpc("sesion", { p_token: E.token });
+    if (!s.ok) throw new Error("No se pudo abrir la vista");
+    E.yo = s.usuario; E.config = s.config;
+    arrancarApp();
+  } catch (err) { aviso(err.message, "mal"); }
+}
+async function volverAdmin() {
+  if (!E.adminToken) return;
+  E.token = E.adminToken;
+  E.adminToken = null; E.previendo = null;
+  try {
+    const s = await rpc("sesion", { p_token: E.token });
+    if (s.ok) { E.yo = s.usuario; E.config = s.config; }
+  } catch {}
+  arrancarApp();
+}
+function pintarBannerPreview() {
+  let bar = document.getElementById("preview-bar");
+  if (E.previendo) {
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "preview-bar";
+      bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#0B2A18;color:#fff;" +
+        "display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;font-size:14px;box-shadow:0 -2px 10px rgba(0,0,0,.3)";
+      document.body.appendChild(bar);
+    }
+    bar.innerHTML = '<span>👁 Estás viendo la app como <b>' + esc(E.yo ? E.yo.nombre : E.previendo) + "</b> (" + esc(E.previendo) + ")</span>" +
+      '<button id="pv-volver" style="background:#fff;color:#0B2A18;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">← Volver a mi cuenta</button>';
+    document.getElementById("pv-volver").onclick = () => volverAdmin();
+  } else if (bar) {
+    bar.remove();
+  }
+}
 function arrancarApp() {
   $("#acceso").style.display = "none";
   $("#app").hidden = false;
   $("#cinta-demo").hidden = !MODO_DEMO;
   E.vista = yoSoyPosLocal() ? "pos" : { cliente: "bodega", vendedor: "publicar", admin: "resumen" }[E.yo.rol];
   pintarNav();
+  pintarBannerPreview();
   pintar();
 }
 async function pintar() {
@@ -2773,6 +2826,7 @@ VISTAS.tienda_local = async () => {
           '<div class="tenue">' + esc(v.usuario) + (v.telefono ? " · " + esc(v.telefono) : "") + " · " +
             (v.ultimo_acceso ? "entró " + fecha(v.ultimo_acceso) : "nunca ha entrado") + "</div></div>" +
           '<div class="fila envolver" style="justify-content:flex-end">' +
+            '<button class="btn claro chico" data-vercomo="' + v.id + '" data-comorol="vendedora">👁 Ver como vendedora</button>' +
             '<button class="btn claro chico" data-vend-pin="' + v.id + '" data-usuario="' + esc(v.usuario) + '">Reiniciar PIN</button>' +
             '<button class="btn claro chico peligro" data-vend-quita="' + v.id + '" data-nombre="' + esc(v.nombre) + '">Quitar</button></div></div>').join("")
           : '<p class="tenue" style="margin:0">Aún no hay vendedoras. Toca “Alta vendedora”.</p>') + "</div>"
@@ -2780,6 +2834,7 @@ VISTAS.tienda_local = async () => {
         (delDia.length ? delDia.map(ventaRow).join("") : '<p class="tenue" style="margin:0">Hoy no hay ventas todavía.</p>') + "</div>");
 
   $$("[data-tl]").forEach(b => b.onclick = () => { E.datos.tlTab = b.dataset.tl; pintar(); });
+  $$("[data-vercomo]").forEach(b => b.onclick = () => verComo(b.dataset.vercomo, b.dataset.comorol));
   if ($("#tl-crear-vend")) $("#tl-crear-vend").onclick = () => crearVendedoraLocal();
   $$("[data-vend-quita]").forEach(b => b.onclick = async () => {
     if (!confirm("¿Quitar a " + b.dataset.nombre + " como vendedora de la tienda? Su cuenta se conserva, solo deja de ser punto de venta.")) return;
@@ -4194,6 +4249,7 @@ async function pantallaUsuarios(area) {
               "💵 De contado" + (clienteContado(u.id) ? " · ON ✓" : " · OFF") + "</button>" +
             '<button class="btn claro chico" data-recargo="' + u.id + '" data-nombre="' + esc(u.nombre) + '" data-rsaldo="' + (u.saldo || 0) + '">Recargo</button>' +
             '<button class="btn claro chico" data-ficha="' + u.id + '">Expediente</button>' +
+            '<button class="btn claro chico" data-vercomo="' + u.id + '" data-comorol="cliente">👁 Ver como cliente</button>' +
             '<button class="btn ' + (clienteVeLocal(u.id) ? "verde" : "claro") + ' chico" data-local="' + u.id +
               '" data-nombre="' + esc(u.nombre) + '">' + esc(ESPACIO_LOCAL().toUpperCase()) + (clienteVeLocal(u.id) ? " · ON ✓" : " · OFF") + "</button>" +
             '<button class="btn ' + (clienteZonaExt(u.id) ? "kraft" : "claro") + ' chico" data-zonaext="' + u.id +
@@ -4310,6 +4366,7 @@ async function pantallaUsuarios(area) {
       } catch (err) { aviso(err.message, "mal"); }
     };
   });
+  $$("[data-vercomo]").forEach(b => b.onclick = () => verComo(b.dataset.vercomo, b.dataset.comorol));
   $$("[data-poslocal]").forEach(b => b.onclick = async () => {
     const id = b.dataset.poslocal, prender = b.dataset.eslocal !== "1";
     try {
