@@ -1843,7 +1843,7 @@ const LOCAL = {
     if (BD.usuarios.some(u => u.usuario.toLowerCase() === usuario)) return { ok: false, motivo: "Ese usuario ya está ocupado" };
     const nu = {
       id: uid(), usuario, pin_hash: a.p_pin_hash, nombre: (a.p_nombre || usuario).trim(), rol: a.p_rol,
-      tipo_cliente: a.p_rol === "cliente" ? (a.p_tipo || "local") : null,
+      tipo_cliente: a.p_rol === "cliente" ? (a.p_tipo || "local") : (a.p_rol === "vendedor" && a.p_tipo === "local" ? "local" : null),
       telefono: a.p_telefono || "", ciudad: a.p_ciudad || "", direccion: "", paqueteria: "",
       estado_mx: a.p_estado_mx || "",
       saldo: 0, limite_credito: Number(a.p_limite || 0), estado: "activo", notas: "",
@@ -1889,6 +1889,14 @@ const LOCAL = {
     });
     if (p_datos.pin_hash) u.pin_hash = p_datos.pin_hash;
     if (p_datos.estado === "suspendido") BD.sesiones = BD.sesiones.filter(s => s.usuario_id !== u.id);
+    guardarBD();
+    return { ok: true };
+  },
+  marcar_vendedora_local({ p_token, p_id, p_on }) {
+    exige(p_token, ["admin"]);
+    const u = BD.usuarios.find(x => x.id === p_id && x.rol === "vendedor");
+    if (!u) return { ok: false, motivo: "No existe la vendedora" };
+    u.tipo_cliente = p_on ? "local" : null;
     guardarBD();
     return { ok: true };
   },
@@ -2334,7 +2342,8 @@ function listaPosLocal() {
   return Array.isArray(l) ? l : [];
 }
 function esVendedoraLocal(id) { return listaPosLocal().includes(id); }
-function yoSoyPosLocal() { return E.yo && E.yo.rol === "vendedor" && esVendedoraLocal(E.yo.id); }
+function yoSoyPosLocal() { return E.yo && E.yo.rol === "vendedor" && E.yo.tipo_cliente === "local"; }
+function esVendLocalU(u) { return u && u.rol === "vendedor" && u.tipo_cliente === "local"; }
 
 const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"],
@@ -2585,11 +2594,35 @@ VISTAS.pos = async () => {
       const r = await rpc("local_vender", { p_token: E.token,
         p_items: E.pos.map(l => ({ producto_id: l.id, cantidad: l.cantidad })) });
       if (!r.ok) throw new Error(r.motivo);
+      const vendidos = E.pos.slice();
+      const totVenta = r.total || total;
+      const folio = r.folio || "—";
       E.pos = [];
-      hoja('<h2>Venta registrada</h2>' +
-        '<div class="mensaje verde">Folio <b>' + esc(r.folio || "—") + "</b> · Total " + dinero(r.total || total) + "</div>" +
-        '<p class="tenue">Ya se descontó de existencias y el administrador la verá en el reporte.</p>' +
-        '<button class="btn lleno verde" data-cerrar>Listo</button>');
+      const fechaTk = new Date().toLocaleString("es-MX");
+      const filasTk = vendidos.map(l =>
+        '<div style="display:flex;justify-content:space-between;gap:8px"><span>' + l.cantidad + " × " + esc(l.titulo) + "</span>" +
+        '<span>' + dinero(l.precio * l.cantidad) + "</span></div>").join("");
+      const ticketHTML =
+        '<div id="ticket-area" style="font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:1.5;max-width:300px;margin:0 auto;padding:14px;border:1px dashed #999;border-radius:8px;color:#111;background:#fff">' +
+          '<div style="text-align:center;font-weight:700;font-size:15px">' + esc(NOMBRE_LOCAL()) + "</div>" +
+          '<div style="text-align:center;color:#666;margin-bottom:8px">Ticket de venta</div>' +
+          '<div style="color:#666">Folio: <b>' + esc(folio) + "</b></div>" +
+          '<div style="color:#666;margin-bottom:8px">' + esc(fechaTk) + (E.yo ? " · " + esc(E.yo.nombre) : "") + "</div>" +
+          '<div style="border-top:1px solid #ccc;margin:6px 0;padding-top:6px">' + filasTk + "</div>" +
+          '<div style="border-top:1px solid #000;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-weight:700;font-size:15px"><span>TOTAL</span><span>' + dinero(totVenta) + "</span></div>" +
+          '<div style="text-align:center;color:#666;margin-top:10px">¡Gracias por su compra!</div>' +
+        "</div>";
+      hoja('<h2>Venta registrada</h2>' + ticketHTML +
+        '<button class="btn lleno verde" style="margin-top:12px" id="tk-imprimir">🖨️ Imprimir ticket</button>' +
+        '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Listo</button>');
+      if ($("#tk-imprimir")) $("#tk-imprimir").onclick = () => {
+        const cont = $("#ticket-area"); if (!cont) return;
+        const w = window.open("", "_blank", "width=380,height=600");
+        if (!w) return aviso("Permite las ventanas emergentes para imprimir", "mal");
+        w.document.write('<html><head><title>Ticket ' + esc(folio) + '</title></head><body style="margin:0;padding:10px">' +
+          cont.outerHTML + '<script>window.onload=function(){window.print();}<\/script></body></html>');
+        w.document.close();
+      };
       pintar();
     } catch (err) { aviso(err.message, "mal"); btn.disabled = false; btn.textContent = "Registrar venta"; }
   };
@@ -2663,14 +2696,7 @@ function crearVendedoraLocal() {
         p_estado_mx: "", p_saldo: 0, p_limite: 0
       });
       if (!r.ok) throw new Error(r.motivo);
-      // Buscar su id y marcarla como punto de venta de la tienda
-      const uv = await rpc("admin_usuarios", { p_token: E.token, p_rol: "vendedor" });
-      const nueva = (uv.items || []).find(u => String(u.usuario).toLowerCase() === usuario.toLowerCase());
-      if (nueva) {
-        const lista = [...listaPosLocal(), nueva.id];
-        const rc = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { pos_local: lista } });
-        if (rc.ok) { E.config = rc.config; if (!Array.isArray(E.config.pos_local)) E.config.pos_local = lista; }
-      }
+      // Queda como vendedora del LOCAL por su tipo (p_tipo:"local"); no depende de config.
       cerrarHoja();
       hoja('<h2>Vendedora lista</h2><div class="mensaje kraft">Usuario <b>' + esc(usuario) + "</b> · PIN <b>" + pinv +
         '</b><br>Cópialo ahora; el PIN no se vuelve a mostrar.</div>' +
@@ -2686,7 +2712,7 @@ VISTAS.tienda_local = async () => {
   const tab = E.datos.tlTab || "hoy";
   const vent = await rpc("ventas_local", { p_token: E.token });
   const uv = await rpc("admin_usuarios", { p_token: E.token, p_rol: "vendedor" });
-  const vendedoras = (uv.items || []).filter(u => u.estado !== "eliminado" && esVendedoraLocal(u.id));
+  const vendedoras = (uv.items || []).filter(u => u.estado !== "eliminado" && esVendLocalU(u));
   const prod = await rpc("admin_productos", { p_token: E.token, p_busqueda: "", p_archivados: false });
   const ventas = (vent && vent.items) || [];
   const inventario = (prod.items || []).filter(esProductoLocal);   // admin_productos ya excluye archivados
@@ -2757,11 +2783,9 @@ VISTAS.tienda_local = async () => {
   if ($("#tl-crear-vend")) $("#tl-crear-vend").onclick = () => crearVendedoraLocal();
   $$("[data-vend-quita]").forEach(b => b.onclick = async () => {
     if (!confirm("¿Quitar a " + b.dataset.nombre + " como vendedora de la tienda? Su cuenta se conserva, solo deja de ser punto de venta.")) return;
-    const nueva = listaPosLocal().filter(x => x !== b.dataset.vendQuita);
     try {
-      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { pos_local: nueva } });
-      if (!r.ok) throw new Error(r.motivo);
-      E.config = r.config; if (!Array.isArray(E.config.pos_local)) E.config.pos_local = nueva;
+      const r = await rpc("marcar_vendedora_local", { p_token: E.token, p_id: b.dataset.vendQuita, p_on: false });
+      if (r && r.ok === false) throw new Error(r.motivo);
       aviso("Vendedora quitada de la tienda", "bien"); pintar();
     } catch (err) { aviso(err.message, "mal"); }
   });
@@ -4105,7 +4129,7 @@ async function pantallaUsuarios(area) {
   if (esEquipo) {
     // El Equipo no muestra las vendedoras de La Bodeguita (esas van en su sección)
     if (filtro === "") d.items = d.items.filter(u => u.rol === "vendedor" || u.rol === "admin");
-    d.items = d.items.filter(u => !(u.rol === "vendedor" && esVendedoraLocal(u.id)));
+    d.items = d.items.filter(u => !esVendLocalU(u));
   } else {
     d.items = d.items.filter(u => u.rol === "cliente");
   }
@@ -4155,8 +4179,9 @@ async function pantallaUsuarios(area) {
             '" data-usuario="' + esc(u.usuario) + '" data-saldo="' + (u.saldo || 0) + '">Eliminar</button>' : "");
           if (u.rol !== "cliente") {
             const bPos = (u.rol === "vendedor"
-              ? '<button class="btn ' + (esVendedoraLocal(u.id) ? "verde" : "claro") + ' chico" data-poslocal="' + u.id +
-                '" data-nombre="' + esc(u.nombre) + '">' + esc(ESPACIO_LOCAL().toUpperCase()) + (esVendedoraLocal(u.id) ? " · ON ✓" : " · OFF") + "</button>"
+              ? '<button class="btn ' + (esVendLocalU(u) ? "verde" : "claro") + ' chico" data-poslocal="' + u.id +
+                '" data-eslocal="' + (esVendLocalU(u) ? "1" : "0") + '" data-nombre="' + esc(u.nombre) + '">' +
+                esc(ESPACIO_LOCAL().toUpperCase()) + (esVendLocalU(u) ? " · ON ✓" : " · OFF") + "</button>"
               : "");
             return '<div class="fila envolver linea-arriba">' + bPos + bEditar + bPin + bEstado + bElim + "</div>";
           }
@@ -4284,16 +4309,12 @@ async function pantallaUsuarios(area) {
     };
   });
   $$("[data-poslocal]").forEach(b => b.onclick = async () => {
-    const id = b.dataset.poslocal;
-    const actual = listaPosLocal();
-    const nueva = actual.includes(id) ? actual.filter(x => x !== id) : [...actual, id];
+    const id = b.dataset.poslocal, prender = b.dataset.eslocal !== "1";
     try {
-      const r = await rpc("admin_guardar_config", { p_token: E.token, p_datos: { pos_local: nueva } });
-      if (!r.ok) throw new Error(r.motivo);
-      E.config = r.config;
-      if (!Array.isArray(E.config.pos_local)) E.config.pos_local = nueva;
-      aviso(nueva.includes(id) ? b.dataset.nombre + " ahora es vendedora de " + ESPACIO_LOCAL().toUpperCase()
-                               : "Se le quitó el punto de venta a " + b.dataset.nombre, "bien");
+      const r = await rpc("marcar_vendedora_local", { p_token: E.token, p_id: id, p_on: prender });
+      if (r && r.ok === false) throw new Error(r.motivo);
+      aviso(prender ? b.dataset.nombre + " ahora vende en " + ESPACIO_LOCAL().toUpperCase()
+                    : "Se le quitó el punto de venta a " + b.dataset.nombre, "bien");
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
   });
