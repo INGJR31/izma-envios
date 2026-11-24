@@ -4129,7 +4129,6 @@ async function pantallaUsuarios(area) {
   if (esEquipo) {
     // El Equipo no muestra las vendedoras de La Bodeguita (esas van en su sección)
     if (filtro === "") d.items = d.items.filter(u => u.rol === "vendedor" || u.rol === "admin");
-    d.items = d.items.filter(u => !esVendLocalU(u));
   } else {
     d.items = d.items.filter(u => u.rol === "cliente");
   }
@@ -4156,6 +4155,7 @@ async function pantallaUsuarios(area) {
         (u.rol === "cliente" && clienteContado(u.id) ? '<span class="sello verde">💵 De contado</span>' : "") +
         (u.rol === "cliente" && clienteConfianza(u.id) ? '<span class="sello kraft">⭐ De confianza</span>' : "") +
         (u.rol === "cliente" && clienteZonaExt(u.id) ? '<span class="sello kraft">📦 Zona extendida</span>' : "") +
+        (esVendLocalU(u) ? '<span class="sello verde">🏪 Vendedora de ' + esc(NEGOCIO_LOCAL()) + '</span>' : "") +
         '<span class="sello ' + (u.estado === "activo" ? "verde" : "rojo") + '">' + esc(u.estado) + "</span></div></div>" +
         '<p class="tenue" style="margin:4px 0">' + esc(u.usuario) + " · " + esc(u.rol) +
           (u.tipo_cliente ? " " + esc(u.tipo_cliente) : "") +
