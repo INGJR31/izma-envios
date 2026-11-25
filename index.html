@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-c</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-d</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-c</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-d</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -1982,7 +1982,7 @@ const LOCAL = {
     guardarBD();
     return { ok: true, config: Object.assign({}, BD.config) };
   },
-  local_vender({ p_token, p_items }) {
+  local_vender({ p_token, p_items, p_cliente }) {
     const u = exige(p_token, ["vendedor", "admin"]);
     if (!Array.isArray(p_items) || !p_items.length) return { ok: false, motivo: "Agrega productos a la venta" };
     const local = (BD.config.espacio_local || "Local").trim().toLowerCase();
@@ -2008,7 +2008,7 @@ const LOCAL = {
     const f = new Date();
     const folio = "LB" + String(f.getFullYear()).slice(2) + String(f.getMonth() + 1).padStart(2, "0") +
                   String(f.getDate()).padStart(2, "0") + String(BD.folio_local).padStart(3, "0");
-    const venta = { id: uid(), folio, vendedora_id: u.id, vendedora: u.nombre, detalle, estado: "activa",
+    const venta = { id: uid(), folio, vendedora_id: u.id, vendedora: u.nombre, cliente: String(p_cliente || "").trim(), detalle, estado: "activa",
       piezas: detalle.reduce((a, x) => a + x.cantidad, 0), total: redondea(total), creado_en: ahora() };
     BD.ventas_local.push(venta);
     bitacora(u, "registró venta de tienda", "tienda_local", folio, { total: venta.total, piezas: venta.piezas });
@@ -2690,6 +2690,7 @@ VISTAS.pos = async () => {
         '<div style="text-align:right"><div class="num">' + dinero(pu * l.cantidad) + "</div>" +
         '<button class="btn claro chico" data-quita-t="' + l.id + '">Quitar</button></div></div>'; }).join("") +
       '<div class="total"><span>' + piezasT + ' piezas</span><span class="cifra">' + dinero(total) + "</span></div>" +
+      '<label class="campo"><span>¿Para quién es la venta? (nombre del cliente)</span><input id="pos-cliente" value="' + esc(E.datos.posCliente || "") + '" placeholder="Ej. María López"></label>' +
       '<button class="btn lleno verde" id="pos-cobrar">Registrar venta · ' + dinero(total) + "</button>" +
       '<button class="btn lleno claro" style="margin-top:8px" id="pos-limpiar">Vaciar ticket</button></div>'
       : '<div class="mensaje info">Agrega productos para armar la venta.</div>') +
@@ -2747,18 +2748,20 @@ VISTAS.pos = async () => {
     if (n > max) { n = max; aviso("Solo hay " + max + " en existencia", "mal"); }
     l.cantidad = n; pintar();
   });
-  if ($("#pos-limpiar")) $("#pos-limpiar").onclick = () => { E.pos = []; pintar(); };
+  if ($("#pos-cliente")) $("#pos-cliente").oninput = e => { E.datos.posCliente = e.target.value; };
+  if ($("#pos-limpiar")) $("#pos-limpiar").onclick = () => { E.pos = []; E.datos.posCliente = ""; pintar(); };
   if ($("#pos-cobrar")) $("#pos-cobrar").onclick = async () => {
     if (!E.pos.length) return;
+    const cliente = ($("#pos-cliente") ? $("#pos-cliente").value : (E.datos.posCliente || "")).trim();
     const btn = $("#pos-cobrar"); btn.disabled = true; btn.textContent = "Registrando…";
     try {
-      const r = await rpc("local_vender", { p_token: E.token,
+      const r = await rpc("local_vender", { p_token: E.token, p_cliente: cliente,
         p_items: E.pos.map(l => ({ producto_id: l.id, cantidad: l.cantidad, precio: puDe(l) })) });
       if (!r.ok) throw new Error(r.motivo);
       const vendidos = E.pos.slice();
       const totVenta = r.total || total;
       const folio = r.folio || "—";
-      E.pos = [];
+      E.pos = []; E.datos.posCliente = "";
       const fechaTk = new Date().toLocaleString("es-MX");
       const filasTk = vendidos.map(l => { const pu = puDe(l); const niv = nivelDe(l);
         return '<div style="display:flex;justify-content:space-between;gap:8px"><span>' + l.cantidad + " × " + esc(l.titulo) + (niv ? " (" + niv + ")" : "") + "</span>" +
@@ -2768,7 +2771,8 @@ VISTAS.pos = async () => {
           '<div style="text-align:center;font-weight:700;font-size:15px">' + esc(NOMBRE_LOCAL()) + "</div>" +
           '<div style="text-align:center;color:#666;margin-bottom:8px">Ticket de venta</div>' +
           '<div style="color:#666">Folio: <b>' + esc(folio) + "</b></div>" +
-          '<div style="color:#666;margin-bottom:8px">' + esc(fechaTk) + (E.yo ? " · " + esc(E.yo.nombre) : "") + "</div>" +
+          (cliente ? '<div style="color:#111">Cliente: <b>' + esc(cliente) + "</b></div>" : "") +
+          '<div style="color:#666;margin-bottom:8px">' + esc(fechaTk) + (E.yo ? " · Atendió: " + esc(E.yo.nombre) : "") + "</div>" +
           '<div style="border-top:1px solid #ccc;margin:6px 0;padding-top:6px">' + filasTk + "</div>" +
           '<div style="border-top:1px solid #000;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-weight:700;font-size:15px"><span>TOTAL</span><span>' + dinero(totVenta) + "</span></div>" +
           '<div style="text-align:center;color:#666;margin-top:10px">¡Gracias por su compra!</div>' +
@@ -2806,6 +2810,7 @@ VISTAS.pos_ventas = async () => {
         const cancel = v.estado === "cancelada";
         return '<div class="renglon"' + (cancel ? ' style="opacity:.6"' : "") + '><div class="crece"><b>' + esc(v.folio || "venta") + "</b>" +
           (cancel ? ' <span class="sello rojo">cancelada</span>' : "") +
+          (v.cliente ? ' <span class="sello kraft">👤 ' + esc(v.cliente) + "</span>" : "") +
           '<div class="tenue">' + fecha(v.creado_en) + " · " + (v.piezas || 0) + " piezas</div>" +
           '<div class="tenue">' + (v.detalle || []).map(x => x.cantidad + "× " + esc(x.titulo)).join(", ") + "</div>" +
           (cancel ? '<div class="tenue" style="color:var(--sello)">Motivo: ' + esc(v.motivo_cancela || "") + "</div>" : "") + "</div>" +
@@ -2924,7 +2929,8 @@ VISTAS.tienda_local = async () => {
     const cancel = v.estado === "cancelada";
     return '<div class="renglon"' + (cancel ? ' style="opacity:.7"' : "") + '><div class="crece"><b>' + esc(v.folio || "venta") + "</b>" +
       (cancel ? ' <span class="sello rojo">cancelada</span>' : "") +
-      '<div class="tenue">' + fecha(v.creado_en) + " · " + (v.vendedora || "—") + " · " + (v.piezas || 0) + " piezas</div>" +
+      (v.cliente ? ' <span class="sello kraft">👤 ' + esc(v.cliente) + "</span>" : "") +
+      '<div class="tenue">' + fecha(v.creado_en) + " · Atendió: " + (v.vendedora || "—") + " · " + (v.piezas || 0) + " piezas</div>" +
       '<div class="tenue">' + (v.detalle || []).map(x => x.cantidad + "× " + esc(x.titulo)).join(", ") + "</div>" +
       (cancel ? '<div class="tenue" style="color:var(--sello)">Cancelada por ' + esc(v.cancelada_por || v.vendedora || "—") +
         ": " + esc(v.motivo_cancela || "") + "</div>" : "") + "</div>" +
