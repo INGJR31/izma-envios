@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-a</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-b</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-a</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-b</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -2037,6 +2037,35 @@ const LOCAL = {
     guardarBD();
     return { ok: true };
   },
+  local_cancelar_items({ p_token, p_venta, p_items, p_motivo }) {
+    const u = exige(p_token, ["vendedor", "admin"]);
+    const v = (BD.ventas_local || []).find(x => x.id === p_venta);
+    if (!v) return { ok: false, motivo: "Venta no encontrada" };
+    if (u.rol === "vendedor" && v.vendedora_id !== u.id) return { ok: false, motivo: "Esa venta no es tuya" };
+    if (v.estado === "cancelada") return { ok: false, motivo: "Esa venta ya está cancelada" };
+    if (!String(p_motivo || "").trim()) return { ok: false, motivo: "Falta el motivo" };
+    const nuevo = [];
+    (v.detalle || []).forEach(x => {
+      const pedido = (p_items || []).find(i => i.producto_id === x.producto_id);
+      let cancela = pedido ? Math.max(0, Math.min(x.cantidad, Math.floor(pedido.cantidad))) : 0;
+      if (cancela > 0) {
+        const p = BD.productos.find(z => z.id === x.producto_id);
+        if (p) { p.disponible += cancela; p.vendidos = Math.max(0, (p.vendidos || 0) - cancela);
+          if (p.disponible > 0 && p.estado === "agotado") p.estado = "activo"; }
+      }
+      const queda = x.cantidad - cancela;
+      if (queda > 0) nuevo.push({ producto_id: x.producto_id, titulo: x.titulo, precio: x.precio, cantidad: queda, importe: redondea(x.precio * queda) });
+    });
+    v.detalle = nuevo;
+    v.piezas = nuevo.reduce((a, x) => a + x.cantidad, 0);
+    v.total = redondea(nuevo.reduce((a, x) => a + x.precio * x.cantidad, 0));
+    if (v.piezas === 0) { v.estado = "cancelada"; v.motivo_cancela = String(p_motivo).trim(); }
+    else { v.motivo_cancela = [v.motivo_cancela, "Parcial: " + String(p_motivo).trim()].filter(Boolean).join(" | "); }
+    v.cancelada_por = u.nombre; v.cancelada_en = ahora();
+    bitacora(u, "canceló artículos de venta del local", "tienda_local", v.folio, { motivo: String(p_motivo).trim() });
+    guardarBD();
+    return { ok: true, piezas: v.piezas, total: v.total };
+  },
   eliminar_producto({ p_token, p_id }) {
     const u = exige(p_token, ["admin"]);
     const p = BD.productos.find(x => x.id === p_id);
@@ -2774,20 +2803,51 @@ VISTAS.pos_ventas = async () => {
         : '<p class="tenue" style="margin:0">Todavía no registras ventas.</p>') + "</div>";
 
   $$("[data-cancela]").forEach(b => b.onclick = () => {
-    hoja("<h2>Cancelar venta " + esc(b.dataset.folio) + "</h2>" +
-      '<p class="tenue" style="margin-top:0">La mercancía regresa a existencias y <b>se le avisa a administración</b> con el motivo.</p>' +
-      '<label class="campo"><span>Motivo (obligatorio)</span><textarea id="cv-motivo" placeholder="Ej. el cliente se arrepintió, error al cobrar…"></textarea></label>' +
-      '<button class="btn lleno peligro" id="cv-ok">Cancelar la venta</button>' +
-      '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>');
-    $("#cv-ok").onclick = async () => {
-      const motivo = $("#cv-motivo").value.trim();
-      if (motivo.length < 4) return aviso("Escribe el motivo", "mal");
-      try {
-        const r = await rpc("local_cancelar_venta", { p_token: E.token, p_venta: b.dataset.cancela, p_motivo: motivo });
-        if (r && r.ok === false) throw new Error(r.motivo);
-        cerrarHoja(); aviso("Venta cancelada. Administración fue notificada.", "bien"); pintar();
-      } catch (err) { aviso(err.message, "mal"); }
+    const v = items.find(x => x.id === b.dataset.cancela);
+    if (!v) return;
+    const sel = {}; (v.detalle || []).forEach(x => sel[x.producto_id] = 0);
+    let motivoTxt = "";
+    const maxDe = id => ((v.detalle || []).find(x => x.producto_id === id) || {}).cantidad || 0;
+    const render = () => {
+      const piezasC = (v.detalle || []).reduce((a, x) => a + (sel[x.producto_id] || 0), 0);
+      const totalC  = (v.detalle || []).reduce((a, x) => a + (sel[x.producto_id] || 0) * x.precio, 0);
+      const todoSel = piezasC === (v.piezas || 0) && piezasC > 0;
+      hoja("<h2>Cancelar de " + esc(v.folio || "venta") + "</h2>" +
+        '<p class="tenue" style="margin-top:0">Elige <b>cuántas piezas de cada artículo</b> cancelar (toca − y +). Lo que canceles regresa a existencias y se avisa a administración.</p>' +
+        (v.detalle || []).map(x =>
+          '<div class="renglon"><div class="crece"><b>' + esc(x.titulo) + "</b>" +
+            '<div class="tenue">' + dinero(x.precio) + " c/u · se vendieron " + x.cantidad + "</div></div>" +
+            '<div style="display:flex;align-items:center;gap:6px">' +
+              '<button class="btn claro chico" data-cm="' + x.producto_id + '" style="min-width:36px;font-size:18px;line-height:1">−</button>' +
+              '<b style="min-width:30px;text-align:center;font-size:17px' + ((sel[x.producto_id] || 0) > 0 ? ";color:var(--peligro,#c0392b)" : "") + '">' + (sel[x.producto_id] || 0) + "</b>" +
+              '<button class="btn claro chico" data-cp="' + x.producto_id + '" style="min-width:36px;font-size:18px;line-height:1">+</button>' +
+            "</div></div>").join("") +
+        '<div style="margin:8px 0">' +
+          '<button class="btn claro chico" id="cv-todo">' + (todoSel ? "Quitar selección" : "Seleccionar toda la venta") + "</button></div>" +
+        '<div class="total"><span>' + piezasC + " piezas a cancelar</span><span class=\"cifra\">" + dinero(totalC) + "</span></div>" +
+        '<label class="campo"><span>Motivo (obligatorio)</span><textarea id="cv-motivo" placeholder="Ej. el cliente se arrepintió, error al cobrar…">' + esc(motivoTxt) + "</textarea></label>" +
+        '<button class="btn lleno peligro" id="cv-ok">Cancelar lo seleccionado</button>' +
+        '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>');
+      const guardaMotivo = () => { const t = $("#cv-motivo"); if (t) motivoTxt = t.value; };
+      $$("[data-cm]").forEach(x => x.onclick = () => { guardaMotivo(); const id = x.dataset.cm; sel[id] = Math.max(0, (sel[id] || 0) - 1); render(); });
+      $$("[data-cp]").forEach(x => x.onclick = () => { guardaMotivo(); const id = x.dataset.cp; sel[id] = Math.min(maxDe(id), (sel[id] || 0) + 1); render(); });
+      $("#cv-todo").onclick = () => { guardaMotivo(); const todo = piezasC === (v.piezas || 0) && piezasC > 0; (v.detalle || []).forEach(x => sel[x.producto_id] = todo ? 0 : x.cantidad); render(); };
+      $("#cv-ok").onclick = async () => {
+        guardaMotivo();
+        const p_items = (v.detalle || []).filter(x => (sel[x.producto_id] || 0) > 0)
+          .map(x => ({ producto_id: x.producto_id, cantidad: sel[x.producto_id] }));
+        if (!p_items.length) return aviso("Elige al menos una pieza para cancelar (toca +)", "mal");
+        if (motivoTxt.trim().length < 4) return aviso("Escribe el motivo", "mal");
+        try {
+          const r = await rpc("local_cancelar_items", { p_token: E.token, p_venta: v.id, p_items, p_motivo: motivoTxt.trim() });
+          if (r && r.ok === false) throw new Error(r.motivo);
+          cerrarHoja();
+          aviso(r.piezas === 0 ? "Venta cancelada por completo." : "Artículos cancelados. Quedan " + r.piezas + " piezas en la venta.", "bien");
+          pintar();
+        } catch (err) { aviso(err.message, "mal"); }
+      };
     };
+    render();
   });
 };
 
