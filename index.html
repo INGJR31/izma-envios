@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-c</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-a</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261124-c</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-a</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -2642,8 +2642,13 @@ VISTAS.pos = async () => {
       '<div><h2 style="margin:0;color:#fff">Punto de venta</h2><div class="tenue" style="color:#CFE6D8">' + esc(NOMBRE_LOCAL()) + "</div>" +
       '<p class="tenue" style="margin:4px 0 0;color:#CFE6D8">Cobra lo que hay en el local. Se descuenta de existencias.</p></div></div></div>' +
     (E.pos.length ? '<div class="tarjeta"><h2 style="margin:0 0 6px">Ticket actual</h2>' +
-      E.pos.map(l => '<div class="renglon"><div class="crece"><b>' + l.cantidad + " × " + esc(l.titulo) + "</b>" +
+      E.pos.map(l => '<div class="renglon"><div class="crece"><b>' + esc(l.titulo) + "</b>" +
         '<div class="tenue">' + dinero(l.precio) + " c/u</div></div>" +
+        '<div style="display:flex;align-items:center;gap:6px;margin:0 8px">' +
+          '<button class="btn claro chico" data-menos-t="' + l.id + '" style="min-width:36px;font-size:18px;line-height:1">−</button>' +
+          '<b data-qty-t="' + l.id + '" style="min-width:34px;text-align:center;cursor:pointer;font-size:17px">' + l.cantidad + "</b>" +
+          '<button class="btn claro chico" data-mas-t="' + l.id + '" style="min-width:36px;font-size:18px;line-height:1">+</button>' +
+        "</div>" +
         '<div style="text-align:right"><div class="num">' + dinero(l.precio * l.cantidad) + "</div>" +
         '<button class="btn claro chico" data-quita-t="' + l.id + '">Quitar</button></div></div>').join("") +
       '<div class="total"><span>' + piezasT + ' piezas</span><span class="cifra">' + dinero(total) + "</span></div>" +
@@ -2678,6 +2683,28 @@ VISTAS.pos = async () => {
     pintar();
   });
   $$("[data-quita-t]").forEach(b => b.onclick = () => { E.pos = E.pos.filter(x => x.id !== b.dataset.quitaT); pintar(); });
+  const maxDe = id => { const p = items.find(x => x.id === id); return p ? p.disponible : Infinity; };
+  $$("[data-mas-t]").forEach(b => b.onclick = () => {
+    const l = E.pos.find(x => x.id === b.dataset.masT); if (!l) return;
+    if (l.cantidad < maxDe(l.id)) l.cantidad++;
+    else aviso("Solo hay " + maxDe(l.id) + " en existencia", "mal");
+    pintar();
+  });
+  $$("[data-menos-t]").forEach(b => b.onclick = () => {
+    const l = E.pos.find(x => x.id === b.dataset.menosT); if (!l) return;
+    l.cantidad--; if (l.cantidad <= 0) E.pos = E.pos.filter(x => x.id !== l.id);
+    pintar();
+  });
+  $$("[data-qty-t]").forEach(b => b.onclick = () => {
+    const l = E.pos.find(x => x.id === b.dataset.qtyT); if (!l) return;
+    const v = prompt("¿Cuántas piezas de " + l.titulo + "?", l.cantidad);
+    if (v === null) return;
+    let n = Math.floor(Number(v));
+    if (!isFinite(n) || n <= 0) { E.pos = E.pos.filter(x => x.id !== l.id); pintar(); return; }
+    const max = maxDe(l.id);
+    if (n > max) { n = max; aviso("Solo hay " + max + " en existencia", "mal"); }
+    l.cantidad = n; pintar();
+  });
   if ($("#pos-limpiar")) $("#pos-limpiar").onclick = () => { E.pos = []; pintar(); };
   if ($("#pos-cobrar")) $("#pos-cobrar").onclick = async () => {
     if (!E.pos.length) return;
