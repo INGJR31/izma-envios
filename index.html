@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-g</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-h</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-g</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-h</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -3127,18 +3127,17 @@ VISTAS.carrito = async () => {
         return ah > 0 ? '<div class="fila entre" style="color:#0a7a35;font-weight:600;margin:2px 0"><span>🏷️ Ahorro por mayoreo</span><span>− ' + dinero(ah) + "</span></div>" : ""; })() +
       '<div class="total"><span>Total</span><span class="cifra">' + dinero(d.total) + "</span></div>" +
       '<div class="mensaje ' + (alcanza ? "info" : "rojo") + '">' +
-        "Tu saldo a favor: <b>" + dinero(d.saldo) + "</b>" +
-        (d.limite ? " · crédito autorizado " + dinero(d.limite) : "") + "<br>" +
+        "Tu saldo a favor: <b>" + dinero(d.saldo) + "</b><br>" +
         (alcanza
           ? (restante >= 0 ? "Después de esta compra te quedan <b>" + dinero(restante) + "</b>."
-                           : "Quedarías debiendo <b>" + dinero(-restante) + "</b> de tu crédito.")
+                           : "Quedarías debiendo <b>" + dinero(-restante) + "</b>.")
           : "Te faltan <b>" + dinero(d.total - disponible) + "</b>. Abona y vuelve a confirmar.") +
       "</div>" +
       (local
         ? '<label class="campo"><span>Cómo lo recibes</span><select id="envio">' +
           '<option value="recoge">Recojo en la bodega</option>' +
           '<option value="por_cobrar">Envío por paquetería (flete por cobrar)</option></select></label>'
-        : '<div class="mensaje info">Tu pedido se suma a tu cuenta. Los datos de envío (paquetería y dirección) se definen después, cuando IZMA arma tu caja para enviar.</div>') +
+        : "") +
       '<label class="campo"><span>Nota para IZMA (opcional)</span><input id="nota" placeholder="Ej. júntenlo con mi pedido del viernes"></label>' +
       (alcanza
         ? '<button class="btn lleno verde" id="confirmar">Confirmar y pagar con mi saldo</button>'
