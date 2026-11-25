@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-d</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-e</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-d</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-e</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -2673,6 +2673,7 @@ VISTAS.pos = async () => {
     if (Number(may.m1) > 0 && l.cantidad >= may.m1 && Number(may.p1) > 0) return "medio mayoreo"; return ""; };
   const total = E.pos.reduce((a, l) => a + puDe(l) * l.cantidad, 0);
   const piezasT = E.pos.reduce((a, l) => a + l.cantidad, 0);
+  const ahorro = E.pos.reduce((a, l) => a + (baseDe(l) - puDe(l)) * l.cantidad, 0);
 
   $("#vista").innerHTML =
     '<div class="tarjeta" style="background:#0B2A18;color:#fff;border:0"><div class="fila entre envolver">' +
@@ -2689,6 +2690,7 @@ VISTAS.pos = async () => {
         "</div>" +
         '<div style="text-align:right"><div class="num">' + dinero(pu * l.cantidad) + "</div>" +
         '<button class="btn claro chico" data-quita-t="' + l.id + '">Quitar</button></div></div>'; }).join("") +
+      (ahorro > 0 ? '<div class="fila entre" style="color:#0a7a35;font-weight:600;margin:2px 0"><span>🏷️ Ahorro por mayoreo</span><span>− ' + dinero(ahorro) + "</span></div>" : "") +
       '<div class="total"><span>' + piezasT + ' piezas</span><span class="cifra">' + dinero(total) + "</span></div>" +
       '<label class="campo"><span>¿Para quién es la venta? (nombre del cliente)</span><input id="pos-cliente" value="' + esc(E.datos.posCliente || "") + '" placeholder="Ej. María López"></label>' +
       '<button class="btn lleno verde" id="pos-cobrar">Registrar venta · ' + dinero(total) + "</button>" +
@@ -2763,18 +2765,25 @@ VISTAS.pos = async () => {
       const folio = r.folio || "—";
       E.pos = []; E.datos.posCliente = "";
       const fechaTk = new Date().toLocaleString("es-MX");
+      const subBase = vendidos.reduce((a, l) => a + baseDe(l) * l.cantidad, 0);
+      const ahorroV = vendidos.reduce((a, l) => a + (baseDe(l) - puDe(l)) * l.cantidad, 0);
+      const piezasV = vendidos.reduce((a, l) => a + l.cantidad, 0);
       const filasTk = vendidos.map(l => { const pu = puDe(l); const niv = nivelDe(l);
-        return '<div style="display:flex;justify-content:space-between;gap:8px"><span>' + l.cantidad + " × " + esc(l.titulo) + (niv ? " (" + niv + ")" : "") + "</span>" +
-        '<span>' + dinero(pu * l.cantidad) + "</span></div>"; }).join("");
+        return '<div style="display:flex;justify-content:space-between;gap:8px"><span>' + esc(l.titulo) + (niv ? ' <span style="color:#8a5a00">🏷️' + niv + "</span>" : "") + "</span></div>" +
+        '<div style="display:flex;justify-content:space-between;gap:8px;color:#444;margin-bottom:3px"><span>' + l.cantidad + " × " + dinero(pu) + "</span><span>" + dinero(pu * l.cantidad) + "</span></div>"; }).join("");
       const ticketHTML =
-        '<div id="ticket-area" style="font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:1.5;max-width:300px;margin:0 auto;padding:14px;border:1px dashed #999;border-radius:8px;color:#111;background:#fff">' +
-          '<div style="text-align:center;font-weight:700;font-size:15px">' + esc(NOMBRE_LOCAL()) + "</div>" +
-          '<div style="text-align:center;color:#666;margin-bottom:8px">Ticket de venta</div>' +
-          '<div style="color:#666">Folio: <b>' + esc(folio) + "</b></div>" +
-          (cliente ? '<div style="color:#111">Cliente: <b>' + esc(cliente) + "</b></div>" : "") +
-          '<div style="color:#666;margin-bottom:8px">' + esc(fechaTk) + (E.yo ? " · Atendió: " + esc(E.yo.nombre) : "") + "</div>" +
-          '<div style="border-top:1px solid #ccc;margin:6px 0;padding-top:6px">' + filasTk + "</div>" +
-          '<div style="border-top:1px solid #000;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-weight:700;font-size:15px"><span>TOTAL</span><span>' + dinero(totVenta) + "</span></div>" +
+        '<div id="ticket-area" style="font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:1.5;max-width:320px;margin:0 auto;padding:16px;border:1px solid #ddd;border-radius:10px;color:#111;background:#fff">' +
+          '<div style="text-align:center;font-weight:800;font-size:17px;letter-spacing:.5px">' + esc(NOMBRE_LOCAL()) + "</div>" +
+          '<div style="text-align:center;color:#666;margin-bottom:10px;font-size:11px">TICKET DE VENTA</div>' +
+          '<div style="display:flex;justify-content:space-between;color:#555"><span>Folio:</span><b>' + esc(folio) + "</b></div>" +
+          (cliente ? '<div style="display:flex;justify-content:space-between;color:#111"><span>Cliente:</span><b>' + esc(cliente) + "</b></div>" : "") +
+          (E.yo ? '<div style="display:flex;justify-content:space-between;color:#555"><span>Atendió:</span><span>' + esc(E.yo.nombre) + "</span></div>" : "") +
+          '<div style="color:#777;font-size:11px;margin-bottom:8px">' + esc(fechaTk) + "</div>" +
+          '<div style="border-top:1px dashed #bbb;margin:6px 0;padding-top:8px">' + filasTk + "</div>" +
+          '<div style="border-top:1px dashed #bbb;padding-top:8px;display:flex;justify-content:space-between;color:#555"><span>Subtotal (' + piezasV + " pzas)</span><span>" + dinero(subBase) + "</span></div>" +
+          (ahorroV > 0 ? '<div style="display:flex;justify-content:space-between;color:#0a7a35;font-weight:700"><span>🏷️ Ahorro por mayoreo</span><span>− ' + dinero(ahorroV) + "</span></div>" : "") +
+          '<div style="border-top:2px solid #111;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-weight:800;font-size:17px"><span>TOTAL</span><span>' + dinero(totVenta) + "</span></div>" +
+          (ahorroV > 0 ? '<div style="text-align:center;color:#0a7a35;font-size:12px;margin-top:4px">¡Ahorraste ' + dinero(ahorroV) + " con mayoreo!</div>" : "") +
           '<div style="text-align:center;color:#666;margin-top:10px">¡Gracias por su compra!</div>' +
         "</div>";
       hoja('<h2>Venta registrada</h2>' + ticketHTML +
