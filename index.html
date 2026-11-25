@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-f</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-g</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-f</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-g</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -717,7 +717,7 @@ async function semillaBD() {
 
   return {
     config: {
-      minutos_apartado: 3,
+      minutos_apartado: 10080,
       comision_pct: 10,
       tope_transferencia: 499,
       retiro_min: 500, retiro_max: 6000, retiro_multiplo: 50,
@@ -2595,8 +2595,10 @@ VISTAS.bodega = async () => {
       '"><button class="btn" id="bq">Buscar</button></div>' +
     '<div class="filtros">' + cats.map(c =>
       '<button data-cat="' + esc(c) + '" aria-current="' + (E.categoria === c) + '">' + (c ? esc(c) : "Todo") + "</button>").join("") + "</div>" +
-    '<p class="tenue" style="margin:0 0 12px">El apartado dura ' + E.config.minutos_apartado +
-      ' min y se paga con tu saldo a favor. Si se vence, la pieza regresa a la bodega.</p>' +
+    '<p class="tenue" style="margin:0 0 12px">' +
+      ((E.config.minutos_apartado || 0) < 720
+        ? "El apartado dura " + E.config.minutos_apartado + " min y se paga con tu saldo a favor. Si se vence, la pieza regresa a la bodega."
+        : "Lo que apartes queda guardado para ti hasta cerrar tu pedido. Se paga con tu saldo a favor.") + "</p>" +
     '<div class="rejilla">' + d.items.map(pieza).join("") + "</div>" +
     (d.items.length ? "" : '<div class="vacio"><h3>Todavía no hay nada aquí</h3><p>IZMA y los vendedores suben mercancía en cuanto salen de las bodegas de Tijuana.</p></div>');
 
@@ -3106,8 +3108,11 @@ VISTAS.carrito = async () => {
   $("#vista").innerHTML =
     '<div class="tarjeta">' +
       '<div class="fila entre" style="margin-bottom:6px"><h2 style="margin:0">Piezas apartadas</h2>' +
-        '<span class="reloj" data-expira="' + d.items[0].expira_en + '" data-tipo="apartado">⏱ --:--</span></div>' +
-      '<p class="tenue" style="margin:0 0 6px">Si el reloj llega a cero, las piezas regresan a la bodega para otros clientes.</p>' +
+        ((d.config.minutos_apartado || 0) < 720
+          ? '<span class="reloj" data-expira="' + d.items[0].expira_en + '" data-tipo="apartado">⏱ --:--</span>' : "") + "</div>" +
+      ((d.config.minutos_apartado || 0) < 720
+        ? '<p class="tenue" style="margin:0 0 6px">Si el reloj llega a cero, las piezas regresan a la bodega para otros clientes.</p>'
+        : '<p class="tenue" style="margin:0 0 6px">Tus piezas quedan apartadas para ti hasta que se cierre tu pedido.</p>') +
       d.items.map(i => '<div class="renglon">' +
         ((i.media || [])[0]
           ? (i.media[0].tipo === "video"
@@ -3133,10 +3138,7 @@ VISTAS.carrito = async () => {
         ? '<label class="campo"><span>Cómo lo recibes</span><select id="envio">' +
           '<option value="recoge">Recojo en la bodega</option>' +
           '<option value="por_cobrar">Envío por paquetería (flete por cobrar)</option></select></label>'
-        : '<div class="mensaje info">Tu pedido sale por paquetería y el flete se paga al recibir (por cobrar).</div>' +
-          '<div class="dos">' +
-          '<label class="campo"><span>Paquetería</span><input id="paq" value="' + esc(E.yo.paqueteria || "") + '"></label>' +
-          '<label class="campo"><span>Dirección de envío</span><input id="dir" value="' + esc(E.yo.direccion || "") + '"></label></div>') +
+        : '<div class="mensaje info">Tu pedido se suma a tu cuenta. Los datos de envío (paquetería y dirección) se definen después, cuando IZMA arma tu caja para enviar.</div>') +
       '<label class="campo"><span>Nota para IZMA (opcional)</span><input id="nota" placeholder="Ej. júntenlo con mi pedido del viernes"></label>' +
       (alcanza
         ? '<button class="btn lleno verde" id="confirmar">Confirmar y pagar con mi saldo</button>'
@@ -3155,7 +3157,7 @@ VISTAS.carrito = async () => {
       const r = await rpc("confirmar_pedido", {
         p_token: E.token,
         p_envio: ($("#envio") || {}).value || (local ? "recoge" : "por_cobrar"),
-        p_direccion: ($("#dir") || {}).value || "", p_paqueteria: ($("#paq") || {}).value || "",
+        p_direccion: E.yo.direccion || "", p_paqueteria: E.yo.paqueteria || "",
         p_notas: $("#nota").value
       });
       if (!r.ok) throw new Error(r.motivo);
@@ -5561,7 +5563,7 @@ VISTAS.ajustes = async () => {
       '<div class="dos">' +
         '<label class="campo"><span>Múltiplos de</span><input id="c-rmul" inputmode="numeric" value="' + c.retiro_multiplo + '"></label>' +
         '<label class="campo"><span>Banco del retiro</span><input id="c-rbanco" value="' + esc(c.banco_retiro || "") + '"></label></div>' +
-      '<label class="campo"><span>Minutos de apartado</span><input id="c-min" inputmode="numeric" value="' + c.minutos_apartado + '"></label></div>' +
+      '<label class="campo"><span>Minutos de apartado</span><input id="c-min" inputmode="numeric" value="' + c.minutos_apartado + '"><small class="tenue">Es cuánto se guardan las piezas del cliente. Para que NO se suelten solas y duren hasta cerrar la venta, pon un número grande (ej. 10080 = 1 semana, 43200 = 1 mes).</small></label></div>' +
     '<div class="tarjeta"><h2>Datos para transferencia</h2>' +
       '<div class="dos">' +
         '<label class="campo"><span>Banco</span><input id="c-banco" value="' + esc(c.banco_nombre || "") + '"></label>' +
