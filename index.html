@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-e</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-f</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-e</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-f</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -1006,12 +1006,24 @@ const LOCAL = {
     return { ok: true, items, total: redondea(items.reduce((s, i) => s + i.importe, 0)),
              saldo: u.saldo, limite: u.limite_credito, config: Object.assign({}, BD.config) };
   },
+  carrito_may({ p_token }) {
+    const base = this.carrito({ p_token });
+    if (!base.ok) return base;
+    const items = base.items.map(i => {
+      const p = BD.productos.find(x => x.id === i.producto) || {};
+      const may = metaProducto(p.descripcion || "").may;
+      const pu = precioPorCantidad(i.precio, may, i.cantidad);
+      return Object.assign({}, i, { precio: pu, precioBase: i.precio, importe: redondea(pu * i.cantidad) });
+    });
+    return Object.assign({}, base, { items, total: redondea(items.reduce((s, i) => s + i.importe, 0)) });
+  },
   confirmar_pedido({ p_token, p_envio, p_direccion, p_paqueteria, p_notas }) {
     const u = exige(p_token);
     if (u.rol !== "cliente") return { ok: false, motivo: "Solo los clientes hacen pedidos" };
     liberar();
     const vivos = BD.apartados.filter(a => a.usuario_id === u.id && a.estado === "activo");
-    const total = redondea(vivos.reduce((s, a) => s + (BD.productos.find(p => p.id === a.producto_id) || {}).precio * a.cantidad, 0));
+    const puMay = a => { const p = BD.productos.find(z => z.id === a.producto_id) || {}; return precioPorCantidad(p.precio || 0, metaProducto(p.descripcion || "").may, a.cantidad); };
+    const total = redondea(vivos.reduce((s, a) => s + puMay(a) * a.cantidad, 0));
     if (!total) return { ok: false, motivo: "Tu carrito está vacío o se venció el apartado" };
     const tope = redondea(u.saldo + (u.limite_credito || 0));
     if (total > tope)
@@ -1037,7 +1049,7 @@ const LOCAL = {
     vivos.forEach(a => {
       const p = BD.productos.find(x => x.id === a.producto_id);
       BD.items.push({ id: uid(), pedido_id: ped.id, producto_id: p.id, titulo: p.titulo,
-                      precio: p.precio, cantidad: a.cantidad, estado: "asignado", motivo: "" });
+                      precio: puMay(a), cantidad: a.cantidad, estado: "asignado", motivo: "" });
       p.vendidos += a.cantidad;
       a.estado = "confirmado"; a.pedido_id = ped.id;
     });
@@ -2560,7 +2572,7 @@ VISTAS.bodega = async () => {
   d.items = (d.items || []).filter(p => !esProductoLocal(p));
   if (E.yo.rol === "cliente") {
     E.yo.saldo = d.saldo;
-    const car = await rpc("carrito", { p_token: E.token });
+    const car = await rpc("carrito_may", { p_token: E.token });
     E.pendientes = car.items.length;
   }
   pintarNav();
@@ -2622,7 +2634,7 @@ VISTAS.local = async () => {
   }
   if (E.yo.rol === "cliente") {
     E.yo.saldo = d.saldo;
-    const car = await rpc("carrito", { p_token: E.token });
+    const car = await rpc("carrito_may", { p_token: E.token });
     E.pendientes = car.items.length;
   }
   pintarNav();
@@ -3077,7 +3089,7 @@ async function apartarPieza(id, tarjeta) {
 
 VISTAS.carrito = async () => {
   await rpc("renovar_carrito", { p_token: E.token });
-  const d = await rpc("carrito", { p_token: E.token });
+  const d = await rpc("carrito_may", { p_token: E.token });
   E.config = d.config; E.pendientes = d.items.length; E.yo.saldo = d.saldo;
   pintarNav();
   if (!d.items.length) {
@@ -3106,6 +3118,8 @@ VISTAS.carrito = async () => {
         '<div class="tenue num">' + i.cantidad + " × " + dinero(i.precio) + "</div></div>" +
         '<div style="text-align:right"><div class="num" style="font-weight:600">' + dinero(i.importe) + "</div>" +
         '<button class="btn claro chico" data-soltar="' + i.apartado + '">Quitar</button></div></div>').join("") +
+      (() => { const ah = d.items.reduce((a, i) => a + ((i.precioBase || i.precio) - i.precio) * i.cantidad, 0);
+        return ah > 0 ? '<div class="fila entre" style="color:#0a7a35;font-weight:600;margin:2px 0"><span>🏷️ Ahorro por mayoreo</span><span>− ' + dinero(ah) + "</span></div>" : ""; })() +
       '<div class="total"><span>Total</span><span class="cifra">' + dinero(d.total) + "</span></div>" +
       '<div class="mensaje ' + (alcanza ? "info" : "rojo") + '">' +
         "Tu saldo a favor: <b>" + dinero(d.saldo) + "</b>" +
