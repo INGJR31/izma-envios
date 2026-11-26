@@ -256,6 +256,16 @@ html[data-tema="oscuro"] .sello.azul{background:#172554;color:#93C5FD}
 .acceso .pie b{color:#C9D0D2}
 .ticket{font-family:'Barlow Condensed',sans-serif;border:1px solid var(--linea);border-radius:var(--r);padding:16px;background:#fff;color:#14181B}
 .ticket h3{font-size:22px;margin:0}
+.grupo-venta{margin:0 0 22px;border-radius:16px;padding:12px;background:color-mix(in srgb,var(--gv) 7%,transparent);border:1px solid color-mix(in srgb,var(--gv) 30%,transparent)}
+.gv-cab{display:flex;align-items:center;gap:9px;margin:0 2px 12px;flex-wrap:wrap}
+.gv-cab b{font-size:18px;color:var(--gv)}
+html[data-tema="oscuro"] .gv-cab b{filter:brightness(1.6)}
+.gv-n{font-size:12px;font-weight:700;color:#fff;background:var(--gv);padding:3px 10px;border-radius:999px}
+.gv-punto{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--gv);flex:none}
+.grupo-venta .pieza{border-top:5px solid var(--gv)}
+.ventas-chips button{display:inline-flex;align-items:center;gap:6px}
+.ventas-chips button[aria-current="true"][style]{background:var(--gv);border-color:var(--gv);color:#fff}
+@media (max-width:520px){.grupo-venta{padding:8px;margin-left:-6px;margin-right:-6px}}
 .ticket-img{display:block;width:100%;max-width:400px;margin:0 auto;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.18);border:1px solid var(--linea)}
 .ticket .lin{display:flex;justify-content:space-between;gap:10px;font-family:Inter,sans-serif;font-size:14px;padding:3px 0}
 .ticket .corte{border-top:2px dashed var(--linea);margin-top:12px;padding-top:12px}
@@ -2514,6 +2524,7 @@ const E = {
 function salirLocal() {
   almacen.del("izma_token");
   almacen.del("izma_bio");   // al salir, se quita el desbloqueo por huella de este aparato
+  try { E.forzandoPin = false; if ($("#capa") && $("#capa").classList.contains("abierta")) cerrarHoja(); } catch { }
   E.token = ""; E.yo = null; E.pendientes = 0; E.datos = {}; E.chat = null; E.vivo = null; E._pintada = null;
   if ($("#aviso-perfil")) $("#aviso-perfil").innerHTML = "";
   $("#app").hidden = true;
@@ -3067,12 +3078,13 @@ VISTAS.bodega = async () => {
       ((E.config.minutos_apartado || 0) < 720
         ? "El apartado dura " + E.config.minutos_apartado + " min y se paga con tu saldo a favor. Si se vence, la pieza regresa a la bodega."
         : "Lo que apartes queda guardado para ti hasta cerrar tu pedido. Se paga con tu saldo a favor.") + "</p>" +
-    '<div class="rejilla">' + d.items.map(pieza).join("") + "</div>" +
+    bodegaPorVenta(d.items) +
     (d.items.length ? "" : '<div class="vacio"><h3>Todavía no hay nada aquí</h3><p>IZMA y los vendedores suben mercancía en cuanto salen de las bodegas de Tijuana.</p></div>');
 
   $("#bq").onclick = () => { E.busqueda = $("#q").value.trim(); pintar(); };
   $("#q").onkeydown = ev => { if (ev.key === "Enter") $("#bq").click(); };
   $$("[data-cat]").forEach(b => b.onclick = () => { E.categoria = b.dataset.cat; pintar(); });
+  $$("[data-venta-f]").forEach(b => b.onclick = () => { E.datos.filtroVenta = b.dataset.ventaF; pintar(); });
   $$("[data-apartar]").forEach(b => b.onclick = () => apartarPieza(b.dataset.apartar, b.closest(".pieza")));
   $$(".stepper button").forEach(b => b.onclick = () => {
     const i = b.parentElement.querySelector("input");
@@ -3093,6 +3105,42 @@ VISTAS.bodega = async () => {
       '<button class="btn lleno claro" data-cerrar>Cerrar</button>');
   });
 };
+
+/* Bodega separada por VENTA: cada venta con su color */
+function gruposVenta(items) {
+  const g = new Map();
+  items.forEach(p => {
+    const k = String(p.venta_id || ("o:" + (p.origen || "—").trim()));
+    if (!g.has(k)) g.set(k, { k, origen: (p.origen || "Bodega IZMA").trim(), items: [], desde: p.creado_en, ult: p.creado_en });
+    const x = g.get(k); x.items.push(p);
+    if (p.creado_en < x.desde) x.desde = p.creado_en;
+    if (p.creado_en > x.ult) x.ult = p.creado_en;
+  });
+  const lista = [...g.values()].sort((a, b) => String(b.ult).localeCompare(String(a.ult)));
+  const porOrigen = {};
+  lista.forEach(x => porOrigen[x.origen] = (porOrigen[x.origen] || 0) + 1);
+  const PALETA = ["#0B6B3A", "#7C3AED", "#DB2777", "#EA580C", "#0284C7", "#CA8A04", "#0F766E", "#B91C1C", "#4F46E5", "#65A30D"];
+  lista.forEach((x, i) => {
+    x.color = PALETA[i % PALETA.length];
+    x.nombre = x.origen + (porOrigen[x.origen] > 1 ? " · venta del " + new Date(x.desde).toLocaleDateString("es-MX", { day: "numeric", month: "short" }) : "");
+  });
+  return lista;
+}
+function bodegaPorVenta(items) {
+  const grupos = gruposVenta(items);
+  if (grupos.length < 2) return '<div class="rejilla">' + items.map(pieza).join("") + "</div>";
+  let sel = E.datos.filtroVenta || "";
+  if (sel && !grupos.some(g => g.k === sel)) sel = E.datos.filtroVenta = "";
+  return '<div class="filtros ventas-chips">' +
+      '<button data-venta-f="" aria-current="' + (sel === "") + '">Todas las ventas</button>' +
+      grupos.map(g => '<button data-venta-f="' + esc(g.k) + '" aria-current="' + (sel === g.k) + '" style="--gv:' + g.color + '"><i class="gv-punto"></i>' +
+        esc(g.nombre) + " (" + g.items.length + ")</button>").join("") + "</div>" +
+    grupos.filter(g => !sel || g.k === sel).map(g =>
+      '<section class="grupo-venta" style="--gv:' + g.color + '">' +
+        '<div class="gv-cab"><i class="gv-punto"></i><b>' + esc(g.nombre) + "</b>" +
+          '<span class="gv-n">' + g.items.length + (g.items.length === 1 ? " producto" : " productos") + "</span></div>" +
+        '<div class="rejilla">' + g.items.map(pieza).join("") + "</div></section>").join("");
+}
 
 /* Área LOCAL: venta privada, solo para clientes autorizados */
 VISTAS.local = async () => {
@@ -4725,8 +4773,19 @@ function partirTexto(ctx, texto, ancho) {
   if (l) lineas.push(l);
   return lineas.length ? lineas : [""];
 }
+async function preciosLista() {
+  // precio de lista de cada producto (para mostrar el descuento de mayoreo en el ticket)
+  const m = {};
+  try {
+    const rs = await Promise.all([false, true].map(a => rpc("admin_productos", { p_token: E.token, p_busqueda: "", p_archivados: a }).catch(() => null)));
+    rs.forEach(r => (r && r.items || []).forEach(x => { m[x.id] = Number(x.precio) || 0; }));
+  } catch { }
+  return m;
+}
 async function ticketPedidoImagen(p, etapaTxt) {
   try { await document.fonts.ready; } catch { }
+  const lista = E.yo && E.yo.rol === "admin" ? await preciosLista() : {};
+  const base = i => { const b = lista[i.producto_id]; return b && b > Number(i.precio) ? b : 0; };
   const W = 400, S = 2, M = 22, ANCHO = W - M * 2;
   const logo = await logoIzma();
   const F = (peso, tam) => peso + " " + tam + "px Inter, Arial, sans-serif";
@@ -4777,9 +4836,17 @@ async function ticketPedidoImagen(p, etapaTxt) {
         }
         y += 19;
       });
-      if (H) txt(dev ? "No alcanzó · se regresó a tu saldo" : dinero(i.precio) + " c/u", M, y - 2, F(500, 11.5), dev ? "#B91C1C" : "#8A949A");
+      const b0 = !dev && base(i);
+      if (H) txt(dev ? "No alcanzó · se regresó a tu saldo" : b0 ? "🏷️ Mayoreo " + dinero(i.precio) + " c/u (lista " + dinero(b0) + ")" : dinero(i.precio) + " c/u",
+                 M, y - 2, F(b0 ? 600 : 500, 11.5), dev ? "#B91C1C" : b0 ? "#0B6B3A" : "#8A949A");
       y += 16;
     });
+    const ahorro = its.filter(i => i.estado !== "rechazado").reduce((a, i) => a + (base(i) ? (base(i) - Number(i.precio)) * Number(i.cantidad) : 0), 0);
+    if (ahorro > 0) {
+      y += 2;
+      if (H) { ctx.fillStyle = "#DCFCE7"; ctx.fillRect(M, y - 14, ANCHO, 24); txt("🏷️ Ahorro por mayoreo", M + 8, y + 3, F(700, 12.5), "#166534"); txt("− " + dinero(ahorro), W - M - 8, y + 3, F(800, 13), "#166534", "right"); }
+      y += 22;
+    }
     y += 2; if (H) linea(y, false); y += 26;
     if (H) { txt(piezas + (piezas === 1 ? " pieza" : " piezas"), M, y, F(600, 13), "#5C6670"); txt("TOTAL", W - M - 120, y, F(700, 13), "#5C6670", "right"); txt(dinero(totalVivo), W - M, y + 1, F(800, 20), "#0B6B3A", "right"); }
     y += 26;
