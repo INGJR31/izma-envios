@@ -274,6 +274,15 @@ html[data-tema="oscuro"] .gv-cab b{filter:brightness(1.6)}
 .rep-col i{display:block;width:100%;background:linear-gradient(180deg,#22C06B,#0B6B3A);border-radius:8px 8px 0 0;min-height:2px}
 .rep-monto{font-size:10.5px;color:var(--tinta-2);white-space:nowrap;min-height:14px}
 .rep-lbl{font-size:11px;color:var(--tinta-2);text-align:center;text-transform:capitalize;line-height:1.2}
+.elige-talla{margin:6px 0 2px}
+.elige-talla b{font-size:13px}
+.tallas-sel{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.tallas-sel button{border:1.5px solid var(--linea);background:var(--campo);color:var(--tinta);border-radius:10px;padding:5px 10px;font-weight:700;font-size:14px;
+  display:flex;flex-direction:column;align-items:center;min-width:46px;line-height:1.1}
+.tallas-sel button small{font-size:10.5px;font-weight:600;color:var(--tinta-3)}
+.tallas-sel button[aria-pressed="true"]{border-color:#0B6B3A;background:#0B6B3A;color:#fff}
+.tallas-sel button[aria-pressed="true"] small{color:#CFF5DE}
+.tallas-sel button:disabled{opacity:.45;text-decoration:line-through}
 .ticket-img{display:block;width:100%;max-width:400px;margin:0 auto;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.18);border:1px solid var(--linea)}
 .ticket .lin{display:flex;justify-content:space-between;gap:10px;font-family:Inter,sans-serif;font-size:14px;padding:3px 0}
 .ticket .corte{border-top:2px dashed var(--linea);margin-top:12px;padding-top:12px}
@@ -1037,6 +1046,14 @@ function demoSocial() {
   guardarBD();
 }
 const enLineaDemo = p => p && Date.now() - new Date(p.ultimo).getTime() < 180000;
+/* Tallas en la descripción (igual que tallas.sql) */
+function tallasMoverDemo(p, talla, delta) {
+  if (!p) return;
+  const m = metaProducto(p.descripcion);
+  if (!m.tallas.length) return;
+  m.tallas.forEach(t => { if (String(t.t).toLowerCase() === String(talla).toLowerCase()) t.c = Math.max(0, (Number(t.c) || 0) + delta); });
+  p.descripcion = empacarProducto(p.descripcion, m.may ? Object.assign({ activo: true }, m.may) : null, m.hist, m.tallas);
+}
 /* Igual que perfil_faltan() de Supabase */
 function faltanDemo(u) {
   if (!u || u.rol !== "cliente") return [];
@@ -1392,6 +1409,8 @@ const LOCAL = {
       const p = BD.productos.find(x => x.id === a.producto_id);
       if (p) { p.disponible += a.cantidad; if (p.estado === "agotado") p.estado = "activo"; }
       a.estado = "cancelado";
+      (BD.apartado_tallas || []).filter(t => t.usuario_id === u.id && t.producto_id === a.producto_id && t.estado === "activo")
+        .forEach(t => { tallasMoverDemo(p, t.talla, t.cantidad); t.estado = "liberado"; });
       guardarBD();
     }
     return { ok: true };
@@ -1462,6 +1481,8 @@ const LOCAL = {
       p.vendidos += a.cantidad;
       eventoDemo("compro", u, p, a.cantidad);
       a.estado = "confirmado"; a.pedido_id = ped.id;
+      (BD.apartado_tallas || []).filter(t => t.usuario_id === u.id && t.producto_id === a.producto_id && t.estado === "activo")
+        .forEach(t => { t.estado = "confirmado"; t.pedido_id = ped.id; t.cerrado_en = ahora(); });
     });
     movimiento(u, "compra", -total, "Compra " + folio, folio);
     bitacora(u, "confirmó una compra", "pedido", folio, { total, piezas: vivos.reduce((a, x) => a + x.cantidad, 0) });
@@ -2368,6 +2389,34 @@ const LOCAL = {
         });
       });
     return { ok: true, items };
+  },
+  apartar_talla({ p_token, p_producto, p_talla, p_cantidad }) {
+    const u = exige(p_token);
+    const q = parseInt(p_cantidad, 10) || 0;
+    if (q < 1) return { ok: false, motivo: "Elige cuántas" };
+    const p = BD.productos.find(x => String(x.id) === String(p_producto));
+    if (!p) return { ok: false, motivo: "Ese producto ya no existe" };
+    const tl = metaProducto(p.descripcion).tallas;
+    if (!tl.length) return { ok: false, motivo: "Este producto no tiene tallas" };
+    const t = tl.find(x => String(x.t).toLowerCase() === String(p_talla || "").trim().toLowerCase());
+    if (!t) return { ok: false, motivo: "Esa talla no existe" };
+    const hay = Number(t.c) || 0;
+    if (hay < q) return { ok: false, motivo: hay ? "Solo quedan " + hay + " de talla " + t.t : "Ya no hay talla " + t.t };
+    const r = this.apartar({ p_token, p_producto: p.id, p_cantidad: q });
+    if (!r.ok) return r;
+    tallasMoverDemo(p, t.t, -q);
+    BD.apartado_tallas = BD.apartado_tallas || [];
+    BD.apartado_tallas.push({ id: uid(), usuario_id: u.id, producto_id: p.id, talla: t.t, cantidad: q, estado: "activo", pedido_id: null, creado_en: ahora() });
+    guardarBD();
+    return Object.assign({}, r, { talla: t.t });
+  },
+  mis_tallas({ p_token }) {
+    const u = exige(p_token);
+    return { ok: true, items: (BD.apartado_tallas || []).filter(t => t.usuario_id === u.id && (t.estado === "activo" || t.estado === "confirmado")) };
+  },
+  admin_tallas_pedidos({ p_token }) {
+    exige(p_token, ["admin", "vendedor"]);
+    return { ok: true, items: (BD.apartado_tallas || []).filter(t => t.estado === "confirmado") };
   },
   admin_pedido_etapa({ p_token, p_pedido, p_etapa }) {
     const u = exige(p_token, ["admin"]);
@@ -3741,7 +3790,7 @@ function pieza(p) {
     '<div class="cuerpo">' +
       '<div class="titulo">' + esc(p.titulo) + "</div>" +
       (metaProducto(p.descripcion).desc ? '<div class="tenue">' + esc(metaProducto(p.descripcion).desc) + "</div>" : "") +
-      (metaProducto(p.descripcion).tallas.length ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">' +
+      (metaProducto(p.descripcion).tallas.length && !(libre && cliente) ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">' +
         metaProducto(p.descripcion).tallas.map(t => '<span class="sello ' + ((Number(t.c) || 0) > 0 ? "verde" : "rojo") + ' num">' + esc(t.t) + ": " + (Number(t.c) || 0) + "</span>").join("") + "</div>" : "") +
       (metaProducto(p.descripcion).may ? '<div class="sello kraft num" style="margin:3px 0">🏷️ Mayoreo · ' + textoMayoreo(metaProducto(p.descripcion).may) + "</div>" : "") +
       '<div class="fila entre"><span class="precio">' + dinero(p.precio) + "</span>" +
@@ -3749,36 +3798,88 @@ function pieza(p) {
                : '<span class="sello rojo">Agotado</span>') + "</div>" +
       (p.origen ? '<div class="tenue">Origen: ' + esc(p.origen) + "</div>" : "") +
       (p.mio > 0 ? '<div class="sello kraft num">Tienes ' + p.mio + " en tu carrito</div>" : "") +
+      (libre && cliente && tallasVivas(p).length ?
+        '<div class="elige-talla" data-tallas-de="' + p.id + '"><b>Elige tu talla:</b><div class="tallas-sel">' +
+          tallasVivas(p).map(t => '<button type="button" data-talla-sel="' + esc(t.t) + '" data-max="' + (Number(t.c) || 0) + '"' +
+            ((Number(t.c) || 0) > 0 ? "" : " disabled") + ">" + esc(t.t) + "<small>" + ((Number(t.c) || 0) > 0 ? (Number(t.c) || 0) : "agotada") + "</small></button>").join("") +
+        "</div></div>" : "") +
       (libre && cliente ? '<div class="fila" style="margin-top:auto">' +
         '<div class="stepper"><button data-paso="-1" aria-label="menos">−</button>' +
         '<input class="num" value="1" min="1" max="' + p.disponible + '" inputmode="numeric">' +
         '<button data-paso="1" aria-label="más">+</button></div>' +
-        '<button class="btn kraft" style="flex:1" data-apartar="' + p.id + '">Apartar</button></div>' : "") +
+        '<button class="btn kraft" style="flex:1" data-apartar="' + p.id + '"' + (tallasVivas(p).length ? " disabled" : "") + ">" +
+          (tallasVivas(p).length ? "Elige talla" : "Apartar") + "</button></div>" : "") +
     "</div></article>";
 }
 
+/* Tallas: el cliente elige una talla y cuántas */
+function tallasVivas(p) { return (metaProducto(p.descripcion).tallas || []).filter(t => String(t.t || "").trim()); }
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-talla-sel]"); if (!b || b.disabled) return;
+  const art = b.closest(".pieza"); if (!art) return;
+  art.querySelectorAll("[data-talla-sel]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  art.dataset.talla = b.dataset.tallaSel;
+  const inp = art.querySelector(".stepper input"), max = Number(b.dataset.max) || 1;
+  if (inp) { inp.max = max; inp.value = Math.min(max, Math.max(1, +inp.value || 1)); }
+  const ap = art.querySelector("[data-apartar]");
+  if (ap) { ap.disabled = false; ap.textContent = "Apartar talla " + b.dataset.tallaSel; }
+});
 async function apartarPieza(id, tarjeta) {
   const cant = +(tarjeta.querySelector(".stepper input") || {}).value || 1;
   const btn = tarjeta.querySelector("[data-apartar]");
+  const conTallas = !!tarjeta.querySelector("[data-talla-sel]");
+  const talla = tarjeta.dataset.talla || "";
+  if (conTallas && !talla) { aviso("Primero elige tu talla", "mal"); return; }
+  const txtBtn = conTallas ? "Apartar talla " + talla : "Apartar";
   btn.disabled = true; btn.textContent = "Apartando…";
   try {
-    const r = await rpc("apartar", { p_token: E.token, p_producto: id, p_cantidad: cant });
-    if (!r.ok) { aviso(r.motivo, "mal"); btn.disabled = false; btn.textContent = "Apartar"; return; }
-    aviso("✓ Agregado a tu carrito. Sigue viendo y al final abres el carrito.", "bien");
+    let r;
+    if (conTallas) {
+      try { r = await rpc("apartar_talla", { p_token: E.token, p_producto: String(id), p_talla: talla, p_cantidad: cant }); }
+      catch (err) {
+        if (/apartar_talla|function/i.test(err.message)) throw new Error("Falta activar las tallas (tallas.sql). Avísale a IZMA.");
+        throw err;
+      }
+    } else r = await rpc("apartar", { p_token: E.token, p_producto: id, p_cantidad: cant });
+    if (!r.ok) { aviso(r.motivo, "mal"); btn.disabled = false; btn.textContent = txtBtn; return; }
+    if (conTallas) {
+      // bajar la cuenta de esa talla en la tarjeta, sin recargar
+      const ch = [...tarjeta.querySelectorAll("[data-talla-sel]")].find(x => x.dataset.tallaSel === talla);
+      if (ch) {
+        const quedan = Math.max(0, (Number(ch.dataset.max) || 0) - cant);
+        ch.dataset.max = quedan; ch.querySelector("small").textContent = quedan > 0 ? quedan : "agotada";
+        if (!quedan) { ch.disabled = true; ch.setAttribute("aria-pressed", "false"); delete tarjeta.dataset.talla; }
+        const inp = tarjeta.querySelector(".stepper input"); if (inp) { inp.max = Math.max(1, quedan); inp.value = 1; }
+      }
+    }
+    aviso("✓ " + (conTallas ? "Talla " + talla + " agregada" : "Agregado") + " a tu carrito. Sigue viendo y al final abres el carrito.", "bien");
     // Quedarse en el mismo lugar (sin recargar toda la bodega)
     E.pendientes = (E.pendientes || 0) + 1;
     pintarNav();
-    btn.textContent = "✓ Agregado · apartar más";
-    btn.disabled = false;
+    btn.textContent = conTallas ? (tarjeta.dataset.talla ? "✓ Agregado · apartar más" : "Elige otra talla") : "✓ Agregado · apartar más";
+    btn.disabled = conTallas && !tarjeta.dataset.talla;
   } catch (err) {
     aviso(err.message, "mal");
-    btn.disabled = false; btn.textContent = "Apartar";
+    btn.disabled = false; btn.textContent = txtBtn;
   }
 }
 
+async function leerTallas(fn) {
+  try { const r = await rpc(fn, { p_token: E.token }); return r && r.ok ? (r.items || []) : []; } catch { return []; }
+}
+/* tallas de un renglón de pedido */
+function tallasItem(tallas, p, i) {
+  const tt = (tallas || []).filter(t => t.estado !== "activo" && String(t.producto_id) === String(i.producto_id) &&
+    (t.pedido_id ? String(t.pedido_id) === String(p.id) : (!t.usuario_id || String(t.usuario_id) === String(p.usuario_id))));
+  return tt.length ? textoTallasDe(tt) : "";
+}
+function textoTallasDe(lista) {
+  const m = {}; lista.forEach(t => m[t.talla] = (m[t.talla] || 0) + Number(t.cantidad || 0));
+  return Object.entries(m).map(([t, c]) => t + (c > 1 ? " ×" + c : "")).join(", ");
+}
 VISTAS.carrito = async () => {
   await rpc("renovar_carrito", { p_token: E.token });
-  const d = await rpc("carrito_may", { p_token: E.token });
+  const [d, misT] = await Promise.all([rpc("carrito_may", { p_token: E.token }), leerTallas("mis_tallas")]);
   E.config = d.config; E.pendientes = d.items.length; E.yo.saldo = d.saldo;
   pintarNav();
   if (!d.items.length) {
@@ -3804,7 +3905,9 @@ VISTAS.carrito = async () => {
             : '<img class="mini" src="' + esc(i.media[0].url) + '" alt="">')
           : '<div class="mini"></div>') +
         '<div class="crece"><div style="font-weight:600">' + esc(i.titulo) + "</div>" +
-        '<div class="tenue num">' + i.cantidad + " × " + dinero(i.precio) + "</div></div>" +
+        '<div class="tenue num">' + i.cantidad + " × " + dinero(i.precio) + "</div>" +
+        (() => { const tt = misT.filter(t => t.estado === "activo" && String(t.producto_id) === String(i.producto));
+          return tt.length ? '<div class="sello azul" style="margin-top:3px">Talla: ' + esc(textoTallasDe(tt)) + "</div>" : ""; })() + "</div>" +
         '<div style="text-align:right"><div class="num" style="font-weight:600">' + dinero(i.importe) + "</div>" +
         '<button class="btn claro chico" data-soltar="' + i.apartado + '">Quitar</button></div></div>').join("") +
       (() => { const ah = d.items.reduce((a, i) => a + ((i.precioBase || i.precio) - i.precio) * i.cantidad, 0);
@@ -3817,11 +3920,7 @@ VISTAS.carrito = async () => {
                            : "Quedarías debiendo <b>" + dinero(-restante) + "</b>.")
           : "Te faltan <b>" + dinero(d.total - disponible) + "</b>. Abona y vuelve a confirmar.") +
       "</div>" +
-      (local
-        ? '<label class="campo"><span>Cómo lo recibes</span><select id="envio">' +
-          '<option value="recoge">Recojo en la bodega</option>' +
-          '<option value="por_cobrar">Envío por paquetería (flete por cobrar)</option></select></label>'
-        : "") +
+      '<div class="mensaje kraft">📦 Lo que compres <b>se guarda en tu bodega</b> (Mi bodega). No se envía al momento: cuando quieras que te lo mandemos, lo metes a tu caja y pides el envío.</div>' +
       '<label class="campo"><span>Nota para IZMA (opcional)</span><input id="nota" placeholder="Ej. júntenlo con mi pedido del viernes"></label>' +
       (alcanza
         ? '<button class="btn lleno verde" id="confirmar">Confirmar y pagar con mi saldo</button>'
@@ -3839,7 +3938,7 @@ VISTAS.carrito = async () => {
     try {
       const r = await rpc("confirmar_pedido", {
         p_token: E.token,
-        p_envio: ($("#envio") || {}).value || (local ? "recoge" : "por_cobrar"),
+        p_envio: "recoge",   // todo se guarda en Mi bodega; el envío se pide después con la caja
         p_direccion: E.yo.direccion || "", p_paqueteria: E.yo.paqueteria || "",
         p_notas: $("#nota").value
       });
@@ -3848,7 +3947,7 @@ VISTAS.carrito = async () => {
       const wa = String((r.config || {}).whatsapp_pedidos || "").replace(/\D/g, "");
       ir("pedidos");
       hoja("<h2>Pedido " + esc(r.folio) + "</h2>" +
-        '<p>Se descontaron <b class="num">' + dinero(r.total) + "</b> de tu saldo.</p>" +
+        '<p>Se descontaron <b class="num">' + dinero(r.total) + "</b> de tu saldo. Tus piezas quedan guardadas en <b>Mi bodega</b>.</p>" +
         '<div class="mensaje ' + (r.saldo < 0 ? "rojo" : "verde") + '">' +
           (r.saldo < 0 ? "Quedas debiendo <b>" + dinero(-r.saldo) + "</b>" : "Saldo a favor: <b>" + dinero(r.saldo) + "</b>") + "</div>" +
         (wa ? '<a class="btn lleno verde" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' +
@@ -4049,7 +4148,7 @@ async function leerEtapas(fn) {
 }
 
 async function pedidosCliente() {
-  const [d, etapas] = await Promise.all([rpc("mis_pedidos", { p_token: E.token }), leerEtapas("mis_pedidos_etapas")]);
+  const [d, etapas, tallas] = await Promise.all([rpc("mis_pedidos", { p_token: E.token }), leerEtapas("mis_pedidos_etapas"), leerTallas("mis_tallas")]);
   E.config = d.config; E.yo.saldo = d.saldo;
   pintarNav();
   if (!d.pedidos.length) {
@@ -4079,9 +4178,10 @@ async function pedidosCliente() {
       '<div class="fila entre envolver"><h3 style="margin:0">' + esc(p.folio) + "</h3>" +
         '<span class="sello ' + et[1] + '">' + et[0] + "</span></div>" +
       '<div class="tenue">' + fecha(p.creado_en) + " · " +
-        (p.envio === "recoge" ? "recoges en bodega" : "envío por paquetería, flete por cobrar") + "</div>" +
+        (p.envio === "recoge" ? "se guarda en tu bodega" : "envío por paquetería, flete por cobrar") + "</div>" +
       (asignados.length ? '<div class="linea-arriba"><b>Asignado</b>' + asignados.map(i =>
-        '<div class="fila entre"><span>' + i.cantidad + " × " + esc(i.titulo) + '</span><span class="num">' +
+        '<div class="fila entre"><span>' + i.cantidad + " × " + esc(i.titulo) +
+          (tallasItem(tallas, p, i) ? ' <span class="sello azul">Talla ' + esc(tallasItem(tallas, p, i)) + "</span>" : "") + '</span><span class="num">' +
         dinero(i.precio * i.cantidad) + "</span></div>").join("") + "</div>" : "") +
       (rechazados.length ? '<div class="linea-arriba"><b>No alcanzaste</b>' + rechazados.map(i =>
         '<div class="fila entre"><span class="tachado">' + i.cantidad + " × " + esc(i.titulo) + '</span>' +
@@ -4984,7 +5084,7 @@ async function ticketPedidoImagen(p, etapaTxt) {
       const dev = i.estado === "rechazado";
       if (!dev) piezas += Number(i.cantidad) || 0;
       ctx.font = F(600, 14);
-      const ls = partirTexto(ctx, i.cantidad + " × " + (i.titulo || ""), ANCHO - 100);
+      const ls = partirTexto(ctx, i.cantidad + " × " + (i.titulo || "") + (i.talla_txt ? " · Talla " + i.talla_txt : ""), ANCHO - 100);
       ls.forEach((l, k) => {
         if (H) {
           txt(l, M, y, F(600, 14), dev ? "#9AA3A7" : "#14181B");
@@ -5016,7 +5116,7 @@ async function ticketPedidoImagen(p, etapaTxt) {
     // entrega
     if (H) txt("ENTREGA", M, y, F(700, 10.5), "#8A949A");
     y += 19;
-    const ent = p.envio === "recoge" ? "Recoge en bodega" : "Paquetería · flete por cobrar";
+    const ent = p.envio === "recoge" ? "Se guarda en su bodega (Mi bodega)" : "Paquetería · flete por cobrar";
     if (H) txt(ent + (p.paqueteria ? " · " + p.paqueteria : ""), M, y, F(600, 13), "#14181B");
     y += 18;
     if (p.direccion) { ctx.font = F(500, 12); partirTexto(ctx, p.direccion, ANCHO).forEach(l => { if (H) txt(l, M, y, F(500, 12), "#5C6670"); y += 16; }); }
@@ -5072,7 +5172,8 @@ VISTAS.pedidos = async () => {
                    ["cobrado", "Cobrado / almacenado"]];
   let filtro = E.datos.filtroPedido || "";
   if (!filtros.some(f => f[0] === filtro)) filtro = E.datos.filtroPedido = "";
-  const [d, etapas] = await Promise.all([rpc("admin_pedidos", { p_token: E.token, p_estado: "" }), leerEtapas("admin_pedidos_etapas")]);
+  const [d, etapas, tallas] = await Promise.all([rpc("admin_pedidos", { p_token: E.token, p_estado: "" }), leerEtapas("admin_pedidos_etapas"), leerTallas("admin_tallas_pedidos")]);
+  d.items.forEach(p => (p.items || []).forEach(i => { const t = tallasItem(tallas, p, i); if (t) i.talla_txt = t; }));
   const et_ = p => {
     const e = (etapas && etapas[p.id] && p.estado !== "cancelado") ? etapas[p.id].etapa : null;
     return e === "almacenado" ? "cobrado" : e;
@@ -5098,13 +5199,14 @@ VISTAS.pedidos = async () => {
           " · saldo " + dinero(p.saldo) + "</p>" +
         '<div class="linea-arriba">' + p.items.map(i =>
           '<div class="fila entre" style="padding:3px 0">' +
-            '<span class="' + (i.estado === "rechazado" ? "tachado" : "") + '">' + i.cantidad + " × " + esc(i.titulo) + "</span>" +
+            '<span class="' + (i.estado === "rechazado" ? "tachado" : "") + '">' + i.cantidad + " × " + esc(i.titulo) +
+              (i.talla_txt ? ' <span class="sello azul">Talla ' + esc(i.talla_txt) + "</span>" : "") + "</span>" +
             '<span class="fila"><span class="num">' + dinero(i.precio * i.cantidad) + "</span>" +
             (i.estado === "asignado"
               ? '<button class="btn claro chico" data-no-alcanzo="' + i.id + '">No alcanzó</button>'
               : '<span class="sello rojo">devuelto</span>') + "</span></div>").join("") + "</div>" +
         '<div class="fila entre linea-arriba"><span>' +
-          (p.envio === "recoge" ? "Recoge en bodega" : "Paquetería, flete por cobrar") +
+          (p.envio === "recoge" ? "📦 Se guarda en su bodega" : "Paquetería, flete por cobrar") +
           '</span><span class="cifra num">' + dinero(p.total) + "</span></div>" +
         (p.direccion ? '<p class="tenue" style="margin:6px 0 0">Envío: ' + esc(p.direccion) +
           (p.paqueteria ? " · " + esc(p.paqueteria) : "") + "</p>" : "") +
