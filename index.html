@@ -1368,7 +1368,7 @@ const LOCAL = {
     p.disponible -= q;
     eventoDemo("aparto", u, p, q);
     if (p.disponible === 0) { p.estado = "agotado"; eventoDemo("agotado", null, p, 0); }
-    const mins = BD.config.minutos_apartado;
+    const mins = 10 * 365 * 24 * 60;   // el apartado dura toda la venta (no se vence por tiempo)
     const expira = new Date(Date.now() + mins * 60000).toISOString();
     const ya = BD.apartados.find(a => a.estado === "activo" && a.producto_id === p.id && a.usuario_id === u.id);
     if (ya) { ya.cantidad += q; ya.expira_en = expira; }
@@ -1391,7 +1391,7 @@ const LOCAL = {
   renovar_carrito({ p_token }) {
     const u = exige(p_token);
     liberar();
-    const expira = new Date(Date.now() + BD.config.minutos_apartado * 60000).toISOString();
+    const expira = new Date(Date.now() + 10 * 365 * 864e5).toISOString();
     BD.apartados.filter(a => a.usuario_id === u.id && a.estado === "activo").forEach(a => a.expira_en = expira);
     guardarBD();
     return { ok: true };
@@ -1625,6 +1625,28 @@ const LOCAL = {
     if (u.rol === "vendedor" && v.vendedor_id !== u.id) return { ok: false, motivo: "Esa venta no es tuya" };
     if (v.estado === "cerrada") return { ok: false, motivo: "Esa venta ya está cerrada" };
     liberar();
+    // Lo apartado de esta venta se vuelve pedido de cada cliente (por cobrar), igual que en Supabase
+    const idsV = BD.productos.filter(p => p.venta_id === v.id).map(p => p.id);
+    const clientes = [...new Set(BD.apartados.filter(a => a.estado === "activo" && idsV.includes(a.producto_id)).map(a => a.usuario_id))];
+    let gen = 0; const fallos = [];
+    clientes.forEach(cid => {
+      const c = BD.usuarios.find(x => x.id === cid); if (!c) return;
+      const otros = BD.apartados.filter(a => a.usuario_id === cid && a.estado === "activo" && !idsV.includes(a.producto_id));
+      otros.forEach(a => a.estado = "pausa_cierre");
+      const lim = c.limite_credito; c.limite_credito = (lim || 0) + 1e8;
+      const tk = "cierre-" + uid(); BD.sesiones.push({ token: tk, usuario_id: cid });
+      let r0;
+      try { r0 = this.confirmar_pedido({ p_token: tk, p_envio: null, p_direccion: null, p_paqueteria: null, p_notas: "Generado al cerrar la venta" }); }
+      catch (e) { r0 = { ok: false, motivo: e.message }; }
+      BD.sesiones = BD.sesiones.filter(x => x.token !== tk);
+      c.limite_credito = lim;
+      otros.forEach(a => a.estado = "activo");
+      if (r0 && r0.ok) {
+        gen++;
+        const ped = BD.pedidos.filter(x => x.usuario_id === cid).slice(-1)[0];
+        if (ped) { ped.etapa = "por_cobrar"; ped.etapa_en = ahora(); }
+      } else fallos.push(c.nombre + ": " + ((r0 && r0.motivo) || "no se pudo"));
+    });
     const r = resumenVenta(v);
     BD.folio_ticket = (BD.folio_ticket || 0) + 1;
     const f = new Date();
@@ -1636,7 +1658,7 @@ const LOCAL = {
     bitacora(u, "cerró venta", "venta", v.nombre, r);
     BD.productos.filter(p => p.venta_id === v.id).forEach(p => p.estado = "archivado");
     guardarBD();
-    return { ok: true, folio: v.folio_ticket };
+    return { ok: true, folio: v.folio_ticket, pedidos_generados: gen, no_generados: fallos.length, detalle_no: fallos };
   },
   ticket({ p_token, p_venta }) {
     const u = exige(p_token, ["vendedor", "admin"]);
@@ -3075,9 +3097,7 @@ VISTAS.bodega = async () => {
     '<div class="filtros">' + cats.map(c =>
       '<button data-cat="' + esc(c) + '" aria-current="' + (E.categoria === c) + '">' + (c ? esc(c) : "Todo") + "</button>").join("") + "</div>" +
     '<p class="tenue" style="margin:0 0 12px">' +
-      ((E.config.minutos_apartado || 0) < 720
-        ? "El apartado dura " + E.config.minutos_apartado + " min y se paga con tu saldo a favor. Si se vence, la pieza regresa a la bodega."
-        : "Lo que apartes queda guardado para ti hasta cerrar tu pedido. Se paga con tu saldo a favor.") + "</p>" +
+      "Lo que apartes queda guardado para ti mientras la venta esté abierta. Al cerrar la venta se hace tu cuenta y ves lo que alcanzaste.</p>" +
     bodegaPorVenta(d.items) +
     (d.items.length ? "" : '<div class="vacio"><h3>Todavía no hay nada aquí</h3><p>IZMA y los vendedores suben mercancía en cuanto salen de las bodegas de Tijuana.</p></div>');
 
@@ -3636,11 +3656,8 @@ VISTAS.carrito = async () => {
   $("#vista").innerHTML =
     '<div class="tarjeta">' +
       '<div class="fila entre" style="margin-bottom:6px"><h2 style="margin:0">Piezas apartadas</h2>' +
-        ((d.config.minutos_apartado || 0) < 720
-          ? '<span class="reloj" data-expira="' + d.items[0].expira_en + '" data-tipo="apartado">⏱ --:--</span>' : "") + "</div>" +
-      ((d.config.minutos_apartado || 0) < 720
-        ? '<p class="tenue" style="margin:0 0 6px">Si el reloj llega a cero, las piezas regresan a la bodega para otros clientes.</p>'
-        : '<p class="tenue" style="margin:0 0 6px">Tus piezas quedan apartadas para ti hasta que se cierre tu pedido.</p>') +
+        "</div>" +
+      '<p class="tenue" style="margin:0 0 6px">Tus piezas quedan apartadas mientras la venta esté abierta. Si no confirmas antes, al cerrar la venta se vuelven tu pedido y se hace tu cuenta.</p>' +
       d.items.map(i => '<div class="renglon">' +
         ((i.media || [])[0]
           ? (i.media[0].tipo === "video"
@@ -3860,7 +3877,7 @@ function bloqueEnvio(p) {
   return '<div class="mensaje info" style="margin-top:12px">' +
     (p.guia ? '<div style="font-weight:600;margin-bottom:6px">Guía ' + esc(p.guia) +
        (p.paqueteria ? " · " + esc(p.paqueteria) : "") + "</div>"
-     : '<div style="font-weight:600;margin-bottom:6px">' + esc(p.paqueteria || "Envío") + " en preparación</div>") +
+     : '<div style="font-weight:600;margin-bottom:6px">' + "Paquete en preparación</div>") +
     (p.bultos ? lin("Bultos", p.bultos) : "") +
     (p.peso_kg ? lin("Peso", p.peso_kg + " kg") : "") +
     (e.vol ? lin("Volumen", e.vol.toFixed(3) + " m³ · volumétrico " + e.volumetrico.toFixed(1) + " kg") : "") +
@@ -4244,11 +4261,12 @@ VISTAS.ventas = async () => {
   $$("[data-cerrar-venta]").forEach(b => b.onclick = async () => {
     const v = d.items.find(x => x.id === b.dataset.cerrarVenta);
     if (v.por_confirmar && !confirm("Quedan " + v.por_confirmar + " partidas sin confirmar. ¿Cerrar de todos modos?")) return;
-    if (!confirm("Al cerrar se genera el ticket y la mercancía de esta venta sale del catálogo; queda solo en el historial. ¿Cerramos?")) return;
+    if (!confirm("Al cerrar:\n• Lo que cada cliente apartó de esta venta se vuelve su PEDIDO (Separado / por cobrar), aunque no tenga saldo.\n• Se genera el ticket y la mercancía sale del catálogo.\n¿Cerramos?")) return;
     try {
       const r = await rpc("cerrar_venta", { p_token: E.token, p_venta: v.id });
       if (!r.ok) throw new Error(r.motivo);
-      aviso("Venta cerrada · ticket " + r.folio, "bien");
+      aviso("Venta cerrada · ticket " + r.folio + (r.pedidos_generados ? " · " + r.pedidos_generados + " pedidos por cobrar generados" : ""), "bien");
+      if (r.no_generados) alert("Ojo: a " + r.no_generados + " cliente(s) no se les pudo generar su pedido; su apartado sigue en su carrito:\n\n" + (r.detalle_no || []).join("\n"));
       verTicket(v.id);
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
@@ -4316,11 +4334,12 @@ VISTAS.venta = async () => {
     } catch (err) { aviso(err.message, "mal"); }
   });
   if ($("#cerrar-aqui")) $("#cerrar-aqui").onclick = async () => {
-    if (!confirm("Al cerrar se genera el ticket y la mercancía de esta venta sale del catálogo; queda solo en el historial. ¿Cerramos?")) return;
+    if (!confirm("Al cerrar:\n• Lo que cada cliente apartó de esta venta se vuelve su PEDIDO (Separado / por cobrar), aunque no tenga saldo.\n• Se genera el ticket y la mercancía sale del catálogo.\n¿Cerramos?")) return;
     try {
       const r = await rpc("cerrar_venta", { p_token: E.token, p_venta: v.id });
       if (!r.ok) throw new Error(r.motivo);
-      aviso("Venta cerrada · ticket " + r.folio, "bien");
+      aviso("Venta cerrada · ticket " + r.folio + (r.pedidos_generados ? " · " + r.pedidos_generados + " pedidos por cobrar generados" : ""), "bien");
+      if (r.no_generados) alert("Ojo: a " + r.no_generados + " cliente(s) no se les pudo generar su pedido; su apartado sigue en su carrito:\n\n" + (r.detalle_no || []).join("\n"));
       verTicket(v.id);
       pintar();
     } catch (err) { aviso(err.message, "mal"); }
@@ -4547,8 +4566,7 @@ VISTAS.resumen = async () => {
     '<div class="tarjeta"><h3>Reglas vigentes</h3>' +
       '<p class="tenue" style="margin:0">Transferencias menores a ' + dinero(E.config.tope_transferencia) +
       ". Retiro sin tarjeta por " + esc(E.config.banco_retiro) + " desde " + dinero(E.config.retiro_min) +
-      " en múltiplos de $" + E.config.retiro_multiplo + ". Apartado: " + E.config.minutos_apartado +
-      " minutos. Se cambian en Ajustes.</p></div>";
+      " en múltiplos de $" + E.config.retiro_multiplo + ". El apartado dura mientras la venta esté abierta; al cerrarla se vuelve pedido por cobrar. Se cambian en Ajustes.</p></div>";
 };
 
 function detalleSolicitud(s) {
@@ -5561,7 +5579,7 @@ VISTAS.envios = async () => {
         (p.direccion ? '<p class="tenue" style="margin:0">' + esc(p.direccion) + "</p>" : "") +
         bloqueEnvio(p) +
         '<div class="fila envolver linea-arriba">' +
-          '<button class="btn chico" data-envio="' + p.id + '">' + (p.guia ? "Editar envío" : "Registrar envío") + "</button>" +
+          '<button class="btn chico" data-envio="' + p.id + '">' + (p.guia ? "Editar venta" : "Registrar venta") + "</button>" +
           (tel ? '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' + tel +
             "?text=" + encodeURIComponent("Hola " + p.cliente + ", tu pedido " + p.folio +
               (p.guia ? " ya va en camino. Guía " + p.guia + (p.paqueteria ? " por " + p.paqueteria : "") : "") + ".") +
@@ -6404,7 +6422,7 @@ VISTAS.ajustes = async () => {
       '<div class="dos">' +
         '<label class="campo"><span>Múltiplos de</span><input id="c-rmul" inputmode="numeric" value="' + c.retiro_multiplo + '"></label>' +
         '<label class="campo"><span>Banco del retiro</span><input id="c-rbanco" value="' + esc(c.banco_retiro || "") + '"></label></div>' +
-      '<label class="campo"><span>Minutos de apartado</span><input id="c-min" inputmode="numeric" value="' + c.minutos_apartado + '"><small class="tenue">Es cuánto se guardan las piezas del cliente. Para que NO se suelten solas y duren hasta cerrar la venta, pon un número grande (ej. 10080 = 1 semana, 43200 = 1 mes).</small></label></div>' +
+      '<div class="campo"><span>Apartado</span><input id="c-min" type="hidden" value="' + c.minutos_apartado + '"><div class="mensaje info" style="margin:0">Dura mientras la venta esté abierta (ya no se vence por tiempo). Al cerrar la venta, lo apartado se vuelve pedido por cobrar.</div></div></div>' +
     '<div class="tarjeta"><h2>Datos para transferencia</h2>' +
       '<div class="dos">' +
         '<label class="campo"><span>Banco</span><input id="c-banco" value="' + esc(c.banco_nombre || "") + '"></label>' +
