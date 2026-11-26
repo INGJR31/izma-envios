@@ -161,6 +161,8 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
 .sello.verde{background:var(--verde-claro);color:var(--verde)}
 .sello.rojo{background:var(--sello-claro);color:var(--sello)}
 .sello.kraft{background:var(--kraft-claro);color:#0B6B3A}
+.sello.azul{background:#DBEAFE;color:#1D4ED8}
+html[data-tema="oscuro"] .sello.azul{background:#172554;color:#93C5FD}
 .tenue{color:var(--tinta-3);font-size:13px}
 .vacio{text-align:center;padding:36px 18px;color:var(--tinta-2)}
 .vacio p{margin:6px 0 14px}
@@ -1217,7 +1219,7 @@ const LOCAL = {
     const mensajes = BD.chat.filter(m => !m.borrado && m.id > desde).slice(-100).map(m => {
       const a = BD.usuarios.find(x => x.id === m.usuario_id);
       const oc = a && a.oculto;
-      return { id: m.id, usuario_id: oc ? null : m.usuario_id, nombre: oc ? "Administración" : (a ? a.nombre : m.nombre),
+      return { id: m.id, usuario_id: oc ? null : m.usuario_id, nombre: oc ? "Administración" : (a ? a.nombre : m.nombre), usuario: oc || !a ? null : a.usuario,
                rol: oc ? "admin" : (a ? a.rol : m.rol), foto: oc ? null : ((a && a.foto) || m.foto || null),
                texto: m.texto, creado_en: m.creado_en, mio: m.usuario_id === u.id, verificado: !oc && verifDemo(a) };
     });
@@ -1225,7 +1227,7 @@ const LOCAL = {
     const borrados = BD.chat.filter(m => m.borrado && m.id > max - 300).map(m => m.id);
     const en_linea = Object.keys(BD.presencia).map(id => {
       const a = BD.usuarios.find(x => x.id === id);
-      return a && !a.oculto && a.estado === "activo" && enLineaDemo(BD.presencia[id]) ? { id, nombre: a.nombre, rol: a.rol, foto: a.foto || null, verificado: verifDemo(a) } : null;
+      return a && !a.oculto && a.estado === "activo" && enLineaDemo(BD.presencia[id]) ? { id, nombre: a.nombre, usuario: a.usuario, rol: a.rol, foto: a.foto || null, verificado: verifDemo(a) } : null;
     }).filter(Boolean).sort((a, b) => a.nombre.localeCompare(b.nombre));
     const reacciones = {};
     (BD.reacciones || []).forEach(r => {
@@ -2324,6 +2326,27 @@ const LOCAL = {
           tipo_cliente: c.tipo_cliente, saldo: c.saldo, items: BD.items.filter(i => i.pedido_id === p.id)
         });
       });
+    return { ok: true, items };
+  },
+  admin_pedido_etapa({ p_token, p_pedido, p_etapa }) {
+    const u = exige(p_token, ["admin"]);
+    if (p_etapa != null && !["almacenado", "por_cobrar", "cobrado"].includes(p_etapa)) return { ok: false, motivo: "Etapa no válida" };
+    const p = BD.pedidos.find(x => String(x.id) === String(p_pedido));
+    if (!p) return { ok: false, motivo: "Pedido no encontrado" };
+    p.etapa = p_etapa || null; p.etapa_en = p_etapa ? ahora() : null; p.etapa_por = p_etapa && !u.oculto ? u.nombre : null;
+    guardarBD();
+    return { ok: true };
+  },
+  admin_pedidos_etapas({ p_token }) {
+    exige(p_token, ["admin"]);
+    const items = {};
+    BD.pedidos.filter(p => p.etapa).forEach(p => items[p.id] = { etapa: p.etapa, en: p.etapa_en, por: p.etapa_por });
+    return { ok: true, items };
+  },
+  mis_pedidos_etapas({ p_token }) {
+    const u = exige(p_token);
+    const items = {};
+    BD.pedidos.filter(p => p.usuario_id === u.id && p.etapa).forEach(p => items[p.id] = { etapa: p.etapa, en: p.etapa_en });
     return { ok: true, items };
   },
   admin_actualizar_pedido({ p_token, p_pedido, p_datos }) {
@@ -3805,9 +3828,23 @@ const ESTADO_PEDIDO = {
   entregado: ["Entregado", "verde"],
   cancelado: ["Cancelado", ""]
 };
+/* Etapas de pedido (columna aparte: pedidos.etapa) */
+const ETAPA_PEDIDO = {
+  almacenado: ["Almacenado en bodega", "azul"],
+  por_cobrar: ["Pendiente por cobrar", "rojo"],
+  cobrado: ["Cobrado", "verde"]
+};
+function etiquetaPedido(p, etapas) {
+  const e = etapas && etapas[p.id];
+  if (p.estado !== "cancelado" && e && ETAPA_PEDIDO[e.etapa]) return ETAPA_PEDIDO[e.etapa];
+  return ESTADO_PEDIDO[p.estado] || [p.estado, ""];
+}
+async function leerEtapas(fn) {
+  try { const r = await rpc(fn, { p_token: E.token }); return r && r.ok ? (r.items || {}) : null; } catch { return null; }
+}
 
 async function pedidosCliente() {
-  const d = await rpc("mis_pedidos", { p_token: E.token });
+  const [d, etapas] = await Promise.all([rpc("mis_pedidos", { p_token: E.token }), leerEtapas("mis_pedidos_etapas")]);
   E.config = d.config; E.yo.saldo = d.saldo;
   pintarNav();
   if (!d.pedidos.length) {
@@ -3830,7 +3867,7 @@ async function pedidosCliente() {
       (noAlcanzo ? '<div class="mosaico"><div class="cifra">' + noAlcanzo + "</div><span>partidas que no alcanzaste</span></div>" : "") +
     "</div>" +
     d.pedidos.map(p => {
-    const et = ESTADO_PEDIDO[p.estado] || [p.estado, ""];
+    const et = etiquetaPedido(p, etapas);
     const asignados = p.items.filter(i => i.estado === "asignado");
     const rechazados = p.items.filter(i => i.estado === "rechazado");
     return '<div class="tarjeta">' +
@@ -4669,15 +4706,24 @@ VISTAS.pagos = async () => {
 
 VISTAS.pedidos = async () => {
   if (E.yo.rol === "cliente") return pedidosCliente();
-  const filtro = E.datos.filtroPedido || "";
-  const d = await rpc("admin_pedidos", { p_token: E.token, p_estado: filtro });
-  const filtros = [["", "Todos"], ["preparando", "Por preparar"], ["enviado", "Enviados"],
-                   ["entregado", "Entregados"], ["cancelado", "Cancelados"]];
+  const filtros = [["", "Todos"], ["preparando", "Por preparar"], ["almacenado", "Almacenado en bodega"],
+                   ["por_cobrar", "Pendiente por cobrar"], ["cobrado", "Cobrado"]];
+  let filtro = E.datos.filtroPedido || "";
+  if (!filtros.some(f => f[0] === filtro)) filtro = E.datos.filtroPedido = "";
+  const [d, etapas] = await Promise.all([rpc("admin_pedidos", { p_token: E.token, p_estado: "" }), leerEtapas("admin_pedidos_etapas")]);
+  const et_ = p => (etapas && etapas[p.id] && p.estado !== "cancelado") ? etapas[p.id].etapa : null;
+  const pasa = (p, f) => !f ? true
+    : f === "preparando" ? p.estado === "preparando" && !et_(p)
+    : et_(p) === f;
+  const lista = d.items.filter(p => pasa(p, filtro));
   $("#vista").innerHTML =
+    (etapas === null ? '<div class="mensaje rojo">Falta correr <b>pedidos_etapas.sql</b> en Supabase para usar Almacenado / Pendiente por cobrar / Cobrado.</div>' : "") +
     '<div class="filtros">' + filtros.map(f =>
-      '<button data-f="' + f[0] + '" aria-current="' + (filtro === f[0]) + '">' + f[1] + "</button>").join("") + "</div>" +
-    (d.items.map(p => {
-      const et = ESTADO_PEDIDO[p.estado] || [p.estado, ""];
+      '<button data-f="' + f[0] + '" aria-current="' + (filtro === f[0]) + '">' + f[1] +
+        (f[0] ? " (" + d.items.filter(p => pasa(p, f[0])).length + ")" : "") + "</button>").join("") + "</div>" +
+    (lista.map(p => {
+      const et = etiquetaPedido(p, etapas);
+      const ee = etapas && etapas[p.id] && p.estado !== "cancelado" ? etapas[p.id] : null;
       const tel = String(p.telefono || "").replace(/\D/g, "");
       return '<div class="tarjeta">' +
         '<div class="fila entre envolver"><h3 style="margin:0">' + esc(p.folio) + " · " + esc(p.cliente) + "</h3>" +
@@ -4699,6 +4745,7 @@ VISTAS.pedidos = async () => {
           (p.paqueteria ? " · " + esc(p.paqueteria) : "") + "</p>" : "") +
         (p.notas ? '<p class="tenue" style="margin:2px 0 0">Nota del cliente: ' + esc(p.notas) + "</p>" : "") +
         (p.guia ? '<p class="tenue" style="margin:2px 0 0">Guía: <b>' + esc(p.guia) + "</b></p>" : "") +
+        (ee && ee.en ? '<p class="tenue" style="margin:2px 0 0">' + esc(ETAPA_PEDIDO[ee.etapa] ? ETAPA_PEDIDO[ee.etapa][0] : ee.etapa) + " desde " + fecha(ee.en) + (ee.por ? " · " + esc(ee.por) : "") + "</p>" : "") +
         '<div class="fila envolver linea-arriba">' +
           '<button class="btn chico" data-gestionar="' + p.id + '">Actualizar</button>' +
           (tel ? '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' + tel +
@@ -4719,10 +4766,13 @@ VISTAS.pedidos = async () => {
   });
   $$("[data-gestionar]").forEach(b => b.onclick = () => {
     const p = d.items.find(x => x.id === b.dataset.gestionar);
+    const actual = p.estado === "cancelado" ? "cancelado" : (et_(p) || p.estado);
+    const opciones = [["preparando", "Por preparar"], ["almacenado", "Almacenado en bodega"], ["por_cobrar", "Pendiente por cobrar"],
+                      ["cobrado", "Cobrado"], ["cancelado", "Cancelado (regresa mercancía y saldo)"]];
+    if (!opciones.some(o => o[0] === actual)) opciones.unshift([actual, (ESTADO_PEDIDO[actual] || [actual])[0]]);
     hoja("<h2>" + esc(p.folio) + "</h2>" +
       '<label class="campo"><span>Estado</span><select id="g-estado">' +
-        Object.keys(ESTADO_PEDIDO).map(k =>
-          '<option value="' + k + '"' + (p.estado === k ? " selected" : "") + ">" + ESTADO_PEDIDO[k][0] + "</option>").join("") +
+        opciones.map(o => '<option value="' + o[0] + '"' + (actual === o[0] ? " selected" : "") + ">" + esc(o[1]) + "</option>").join("") +
       "</select></label>" +
       '<div class="dos">' +
         '<label class="campo"><span>Paquetería</span><input id="g-paq" value="' + esc(p.paqueteria || "") + '"></label>' +
@@ -4732,15 +4782,28 @@ VISTAS.pedidos = async () => {
       '<button class="btn lleno" id="g-ok">Guardar</button>' +
       '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cancelar</button>');
     $("#g-ok").onclick = async () => {
+      const elegido = $("#g-estado").value;
+      const esEtapa = !!ETAPA_PEDIDO[elegido];
+      if (esEtapa && etapas === null) return aviso("Primero corre pedidos_etapas.sql en Supabase", "mal");
+      if (esEtapa && p.estado === "cancelado") return aviso("Este pedido está cancelado; ya no se le puede poner etapa", "mal");
+      if (elegido === "cancelado" && p.estado !== "cancelado" &&
+          !confirm("¿Cancelar el pedido " + p.folio + "? La mercancía regresa al inventario y el importe al saldo del cliente.")) return;
+      $("#g-ok").disabled = true;
       try {
+        // Las etapas nuevas no cambian el estado de envío del pedido
+        const estado = esEtapa ? p.estado : elegido;
         const r = await rpc("admin_actualizar_pedido", {
           p_token: E.token, p_pedido: p.id,
-          p_datos: { estado: $("#g-estado").value, paqueteria: $("#g-paq").value,
+          p_datos: { estado, paqueteria: $("#g-paq").value,
                      guia: $("#g-guia").value, notas_izma: $("#g-nota").value }
         });
         if (!r.ok) throw new Error(r.motivo);
+        if (etapas !== null && (esEtapa ? et_(p) !== elegido : !!et_(p) || (etapas[p.id] && elegido !== "cancelado"))) {
+          const r2 = await rpc("admin_pedido_etapa", { p_token: E.token, p_pedido: String(p.id), p_etapa: esEtapa ? elegido : null });
+          if (!r2.ok) throw new Error(r2.motivo);
+        }
         cerrarHoja(); aviso("Pedido actualizado", "bien"); pintar();
-      } catch (err) { aviso(err.message, "mal"); }
+      } catch (err) { aviso(err.message, "mal"); $("#g-ok").disabled = false; }
     };
   });
 };
@@ -6530,7 +6593,8 @@ function etiquetaRol(rol) {
 function verPerfilChat(p) {
   const admin = E.yo && E.yo.rol === "admin";
   hoja('<div style="text-align:center">' + avatar(p.nombre, p.foto, 84) +
-    '<h2 style="margin:10px 0 4px">' + esc(p.nombre) + (p.verificado ? " " + insignia(22) : "") + "</h2>" +
+    '<h2 style="margin:10px 0 2px">' + esc(p.usuario || p.nombre) + (p.verificado ? " " + insignia(22) : "") + "</h2>" +
+    (p.usuario ? '<div class="tenue" style="margin-bottom:6px">' + esc(p.nombre) + "</div>" : "") +
     '<div style="margin-bottom:8px">' + (etiquetaRol(p.rol) || (p.verificado ? '<span class="sello verde">✈️ Cliente verificado</span>' : '<span class="sello">Cliente</span>')) + "</div>" +
     (p.enLinea ? '<div class="estado-en">🟢 En línea ahora</div>' : '<div class="estado-fuera">No conectado</div>') + "</div>" +
     (admin && p.id && p.rol === "cliente" ? '<button class="btn lleno claro" style="margin-top:14px" data-ficha-chat="' + esc(p.id) + '">Ver expediente del cliente</button>' : "") +
@@ -6565,11 +6629,11 @@ function chatBurbuja(m, seguido) {
   return '<div class="msg' + (yo ? " yo" : "") + (seguido ? " seguido" : "") + (E.chat && E.chat.animar ? " entra" : "") + '" data-msg="' + m.id + '">' +
     (yo ? "" : seguido ? '<span class="msg-ava-vacio"></span>'
       : '<button class="msg-ava" data-perfil-chat="' + esc(m.usuario_id || "") + '" data-nom="' + esc(m.nombre) +
-        '" data-rol="' + esc(m.rol || "") + '" data-foto="' + esc(m.foto || "") + '" data-verif="' + (m.verificado ? 1 : 0) + '">' +
+        '" data-usu="' + esc(m.usuario || "") + '" data-rol="' + esc(m.rol || "") + '" data-foto="' + esc(m.foto || "") + '" data-verif="' + (m.verificado ? 1 : 0) + '">' +
         avatar(m.nombre, m.foto, 34) + "</button>") +
     '<div class="msg-col">' +
       '<div class="burbuja' + (adm && !yo ? " admin" : "") + (solo ? " solo-emoji" : "") + '" data-burbuja="' + m.id + '">' +
-        (yo || seguido ? "" : '<div class="msg-nom">' + esc(m.nombre) + (m.verificado ? insignia(14) : "") + etiquetaRol(m.rol) + "</div>") +
+        (yo || seguido ? "" : '<div class="msg-nom">' + esc(m.usuario || m.nombre) + (m.verificado ? insignia(14) : "") + etiquetaRol(m.rol) + "</div>") +
         '<div class="msg-txt">' + esc(m.texto) + "</div>" +
         '<div class="msg-hora">' + horaCorta(m.creado_en) + (borra ? ' · <button class="msg-borrar" data-borrar-msg="' + m.id + '">Borrar</button>' : "") + "</div>" +
       "</div>" +
@@ -6673,10 +6737,10 @@ function chatPintarOnline(lista) {
   if (n) n.innerHTML = '<span class="vivo-punto"></span>' + (lista.length === 1 ? "1 persona en línea" : lista.length + " personas en línea");
   if (!c) return;
   const html = lista.length
-    ? lista.map(o => '<button data-perfil-chat="' + esc(o.id) + '" data-nom="' + esc(o.nombre) + '" data-rol="' + esc(o.rol || "") +
+    ? lista.map(o => '<button data-perfil-chat="' + esc(o.id) + '" data-nom="' + esc(o.nombre) + '" data-usu="' + esc(o.usuario || "") + '" data-rol="' + esc(o.rol || "") +
         '" data-foto="' + esc(o.foto || "") + '" data-verif="' + (o.verificado ? 1 : 0) + '"><span class="punto-en">' + avatar(o.nombre, o.foto, 42) +
         (o.verificado ? '<span class="ava-verif">' + insignia(16) + "</span>" : "") + '</span><span class="n">' +
-        esc(String(o.nombre || "").split(" ")[0]) + "</span></button>").join("")
+        esc(o.usuario || String(o.nombre || "").split(" ")[0]) + "</span></button>").join("")
     : '<span class="tenue" style="align-self:center;font-size:13px">Nadie más conectado ahorita</span>';
   if (c.dataset.h !== html) { c.innerHTML = html; c.dataset.h = html; }
 }
@@ -6842,7 +6906,7 @@ VISTAS.chat = async () => {
     const p = ev.target.closest("[data-perfil-chat]");
     if (p) {
       const id = p.dataset.perfilChat;
-      verPerfilChat({ id, nombre: p.dataset.nom, rol: p.dataset.rol, foto: p.dataset.foto, verificado: p.dataset.verif === "1",
+      verPerfilChat({ id, nombre: p.dataset.nom, usuario: p.dataset.usu || "", rol: p.dataset.rol, foto: p.dataset.foto, verificado: p.dataset.verif === "1",
                       enLinea: (E.chat.online || []).some(o => o.id === id) });
       return;
     }
