@@ -266,7 +266,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-h</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-i</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +305,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-h</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-i</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -3042,6 +3042,14 @@ VISTAS.tienda_local = async () => {
   });
 };
 
+function fotoFalla(img) {
+  img.onerror = null;
+  const d = document.createElement("div");
+  d.className = "fila";
+  d.style.cssText = "height:100%;justify-content:center;color:#9AA3A7";
+  d.textContent = "Sin foto";
+  try { img.replaceWith(d); } catch { }
+}
 function pieza(p) {
   const m = (p.media || [])[0];
   const libre = p.disponible > 0 && p.estado === "activo";
@@ -3050,7 +3058,7 @@ function pieza(p) {
     '<div class="lienzo" data-galeria="' + p.id + '">' +
       (m ? (m.tipo === "video"
         ? '<video src="' + esc(m.url) + '" muted playsinline preload="metadata"></video>'
-        : '<img src="' + esc(m.url) + '" alt="' + esc(p.titulo) + '" loading="lazy">')
+        : '<img src="' + esc(m.url) + '" alt="' + esc(p.titulo) + '" loading="lazy" onerror="fotoFalla(this)">')
         : '<div class="fila" style="height:100%;justify-content:center;color:#9AA3A7">Sin foto</div>') +
       '<span class="cinta">' + esc(p.categoria) + "</span>" +
       ((p.media || []).length > 1 ? '<span class="mas">+' + (p.media.length - 1) + "</span>" : "") +
@@ -3080,9 +3088,13 @@ async function apartarPieza(id, tarjeta) {
   btn.disabled = true; btn.textContent = "Apartando…";
   try {
     const r = await rpc("apartar", { p_token: E.token, p_producto: id, p_cantidad: cant });
-    if (!r.ok) { aviso(r.motivo, "mal"); pintar(); return; }
-    aviso("Apartado " + r.minutos + " min. Pasa a tu carrito.", "bien");
-    pintar();
+    if (!r.ok) { aviso(r.motivo, "mal"); btn.disabled = false; btn.textContent = "Apartar"; return; }
+    aviso("✓ Agregado a tu carrito. Sigue viendo y al final abres el carrito.", "bien");
+    // Quedarse en el mismo lugar (sin recargar toda la bodega)
+    E.pendientes = (E.pendientes || 0) + 1;
+    pintarNav();
+    btn.textContent = "✓ Agregado · apartar más";
+    btn.disabled = false;
   } catch (err) {
     aviso(err.message, "mal");
     btn.disabled = false; btn.textContent = "Apartar";
@@ -5663,7 +5675,8 @@ setInterval(() => {
 
 setInterval(() => {
   if (!E.yo || document.visibilityState !== "visible" || $("#capa").classList.contains("abierta")) return;
-  if (E.vista === "bodega" || E.vista === "venta" || E.vista === "actividad") pintar();
+  // Solo refresca pantallas de admin; NUNCA la bodega del cliente (interrumpe fotos y pierde el lugar).
+  if (E.yo.rol !== "cliente" && (E.vista === "venta" || E.vista === "actividad")) pintar();
 }, 20000);
 
 /* Aviso de lo que va pasando, para administración */
