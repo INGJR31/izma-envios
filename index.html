@@ -256,6 +256,7 @@ html[data-tema="oscuro"] .sello.azul{background:#172554;color:#93C5FD}
 .acceso .pie b{color:#C9D0D2}
 .ticket{font-family:'Barlow Condensed',sans-serif;border:1px solid var(--linea);border-radius:var(--r);padding:16px;background:#fff;color:#14181B}
 .ticket h3{font-size:22px;margin:0}
+.ticket-img{display:block;width:100%;max-width:400px;margin:0 auto;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.18);border:1px solid var(--linea)}
 .ticket .lin{display:flex;justify-content:space-between;gap:10px;font-family:Inter,sans-serif;font-size:14px;padding:3px 0}
 .ticket .corte{border-top:2px dashed var(--linea);margin-top:12px;padding-top:12px}
 .ticket .final{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--linea);margin-top:8px;padding-top:8px}
@@ -3830,9 +3831,9 @@ const ESTADO_PEDIDO = {
 };
 /* Etapas de pedido (columna aparte: pedidos.etapa) */
 const ETAPA_PEDIDO = {
-  almacenado: ["Almacenado en bodega", "azul"],
-  por_cobrar: ["Pendiente por cobrar", "rojo"],
-  cobrado: ["Cobrado", "verde"]
+  por_cobrar: ["Separado / por cobrar", "rojo"],
+  cobrado: ["Cobrado / almacenado", "verde"],
+  almacenado: ["Cobrado / almacenado", "verde"]   // los que ya se marcaron así cuentan como cobrado
 };
 function etiquetaPedido(p, etapas) {
   const e = etapas && etapas[p.id];
@@ -4704,20 +4705,160 @@ VISTAS.pagos = async () => {
   });
 };
 
+/* ===== Ticket digital del pedido (imagen para mandar por WhatsApp) ===== */
+function logoIzma() {
+  return new Promise(res => {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue("--logo");
+      const m = v && v.match(/url\(["']?(data:[^"')]+)["']?\)/);
+      if (!m) return res(null);
+      const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = m[1];
+    } catch { res(null); }
+  });
+}
+function partirTexto(ctx, texto, ancho) {
+  const pal = String(texto || "").split(/\s+/), lineas = []; let l = "";
+  pal.forEach(w => {
+    const prueba = l ? l + " " + w : w;
+    if (ctx.measureText(prueba).width > ancho && l) { lineas.push(l); l = w; } else l = prueba;
+  });
+  if (l) lineas.push(l);
+  return lineas.length ? lineas : [""];
+}
+async function ticketPedidoImagen(p, etapaTxt) {
+  try { await document.fonts.ready; } catch { }
+  const W = 400, S = 2, M = 22, ANCHO = W - M * 2;
+  const logo = await logoIzma();
+  const F = (peso, tam) => peso + " " + tam + "px Inter, Arial, sans-serif";
+  // 1) medir y dibujar en dos pasadas (la primera solo calcula la altura)
+  const dibujar = (ctx, H) => {
+    let y = 0;
+    const txt = (t, x, yy, f, col, al) => { ctx.font = f; ctx.fillStyle = col; ctx.textAlign = al || "left"; ctx.fillText(t, x, yy); };
+    const linea = (yy, punteada) => { ctx.strokeStyle = "#C9CFD3"; ctx.lineWidth = 1; ctx.setLineDash(punteada ? [5, 4] : []); ctx.beginPath(); ctx.moveTo(M, yy); ctx.lineTo(W - M, yy); ctx.stroke(); ctx.setLineDash([]); };
+    if (H) { ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, W, H); }
+    // encabezado oscuro con logo
+    if (H) { ctx.fillStyle = "#14181B"; ctx.fillRect(0, 0, W, 96); }
+    if (H && logo) { const h = 62, w = h * logo.width / logo.height; ctx.drawImage(logo, M, 17, Math.min(w, 170), Math.min(w, 170) * logo.height / logo.width); }
+    if (H) { txt("TICKET DE PEDIDO", W - M, 42, F(700, 13), "#9BE7B9", "right"); txt(String(p.folio || ""), W - M, 64, F(800, 17), "#FFFFFF", "right"); }
+    y = 96 + 26;
+    if (H) txt(fecha(p.creado_en), M, y, F(500, 12), "#6B7479");
+    if (H && etapaTxt) {
+      ctx.font = F(700, 12); const tw = ctx.measureText(etapaTxt).width + 18;
+      ctx.fillStyle = /cobrado/i.test(etapaTxt) ? "#DCFCE7" : /cobrar/i.test(etapaTxt) ? "#FEE2E2" : /cancel/i.test(etapaTxt) ? "#E5E7EB" : "#FEF3C7";
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W - M - tw, y - 15, tw, 22, 11) : ctx.rect(W - M - tw, y - 15, tw, 22); ctx.fill();
+      txt(etapaTxt, W - M - tw / 2, y, F(700, 12), /cobrado/i.test(etapaTxt) ? "#166534" : /cobrar/i.test(etapaTxt) ? "#B91C1C" : /cancel/i.test(etapaTxt) ? "#374151" : "#92400E", "center");
+    }
+    y += 26;
+    // cliente
+    if (H) txt("CLIENTE", M, y, F(700, 10.5), "#8A949A");
+    y += 20;
+    ctx.font = F(700, 17);
+    partirTexto(ctx, p.cliente || "", ANCHO).forEach(l => { if (H) txt(l, M, y, F(700, 17), "#14181B"); y += 21; });
+    const sub = [p.usuario ? "@" + p.usuario : "", p.telefono || "", p.tipo_cliente === "foraneo" ? "Foráneo" : p.tipo_cliente ? "Local" : ""].filter(Boolean).join("  ·  ");
+    if (sub) { if (H) txt(sub, M, y, F(500, 12.5), "#5C6670"); y += 18; }
+    y += 6; if (H) linea(y, true); y += 22;
+    // partidas
+    if (H) { txt("CANT.  PRODUCTO", M, y, F(700, 10.5), "#8A949A"); txt("IMPORTE", W - M, y, F(700, 10.5), "#8A949A", "right"); }
+    y += 18;
+    let piezas = 0;
+    const its = p.items || [];
+    // El total del ticket es lo que SÍ alcanzó (lo que no alcanzó ya se regresó al saldo)
+    const totalVivo = its.length ? its.filter(i => i.estado !== "rechazado").reduce((a, i) => a + Number(i.precio) * Number(i.cantidad), 0) : Number(p.total) || 0;
+    its.forEach(i => {
+      const dev = i.estado === "rechazado";
+      if (!dev) piezas += Number(i.cantidad) || 0;
+      ctx.font = F(600, 14);
+      const ls = partirTexto(ctx, i.cantidad + " × " + (i.titulo || ""), ANCHO - 100);
+      ls.forEach((l, k) => {
+        if (H) {
+          txt(l, M, y, F(600, 14), dev ? "#9AA3A7" : "#14181B");
+          if (k === 0) txt(dinero(Number(i.precio) * Number(i.cantidad)), W - M, y, F(700, 14), dev ? "#9AA3A7" : "#14181B", "right");
+          if (dev && k === 0) { ctx.font = F(600, 14); const w = ctx.measureText(l).width; ctx.strokeStyle = "#9AA3A7"; ctx.beginPath(); ctx.moveTo(M, y - 5); ctx.lineTo(M + w, y - 5); ctx.stroke(); }
+        }
+        y += 19;
+      });
+      if (H) txt(dev ? "No alcanzó · se regresó a tu saldo" : dinero(i.precio) + " c/u", M, y - 2, F(500, 11.5), dev ? "#B91C1C" : "#8A949A");
+      y += 16;
+    });
+    y += 2; if (H) linea(y, false); y += 26;
+    if (H) { txt(piezas + (piezas === 1 ? " pieza" : " piezas"), M, y, F(600, 13), "#5C6670"); txt("TOTAL", W - M - 120, y, F(700, 13), "#5C6670", "right"); txt(dinero(totalVivo), W - M, y + 1, F(800, 20), "#0B6B3A", "right"); }
+    y += 26;
+    if (p.saldo !== undefined && p.saldo !== null) {
+      const s = Number(p.saldo) || 0;
+      if (H) { txt(s < 0 ? "Saldo pendiente" : "Saldo a favor", M, y, F(500, 12.5), "#5C6670"); txt(dinero(Math.abs(s)), W - M, y, F(700, 13), s < 0 ? "#B91C1C" : "#166534", "right"); }
+      y += 22;
+    }
+    y += 4; if (H) linea(y, true); y += 22;
+    // entrega
+    if (H) txt("ENTREGA", M, y, F(700, 10.5), "#8A949A");
+    y += 19;
+    const ent = p.envio === "recoge" ? "Recoge en bodega" : "Paquetería · flete por cobrar";
+    if (H) txt(ent + (p.paqueteria ? " · " + p.paqueteria : ""), M, y, F(600, 13), "#14181B");
+    y += 18;
+    if (p.direccion) { ctx.font = F(500, 12); partirTexto(ctx, p.direccion, ANCHO).forEach(l => { if (H) txt(l, M, y, F(500, 12), "#5C6670"); y += 16; }); }
+    if (p.guia) { if (H) txt("Guía: " + p.guia, M, y, F(700, 12.5), "#14181B"); y += 18; }
+    if (p.notas_izma) { ctx.font = F(500, 12); partirTexto(ctx, "Nota: " + p.notas_izma, ANCHO).forEach(l => { if (H) txt(l, M, y, F(500, 12), "#5C6670"); y += 16; }); }
+    y += 10;
+    // pie
+    if (H) { ctx.fillStyle = "#F2F4F4"; ctx.fillRect(0, y, W, 58); txt("¡Gracias por tu compra! 🛍️", W / 2, y + 25, F(700, 14), "#14181B", "center"); txt("IZMA ENVÍOS", W / 2, y + 44, F(600, 11), "#8A949A", "center"); }
+    y += 58;
+    return y;
+  };
+  const med = document.createElement("canvas").getContext("2d");
+  const H = Math.ceil(dibujar(med, 0));
+  const c = document.createElement("canvas"); c.width = W * S; c.height = H * S;
+  const ctx = c.getContext("2d"); ctx.scale(S, S); ctx.textBaseline = "alphabetic";
+  dibujar(ctx, H);
+  return c;
+}
+async function verTicketPedido(p, etapaTxt) {
+  hoja('<h2 style="margin-bottom:6px">Ticket ' + esc(p.folio) + "</h2>" + '<div class="cargando">Generando ticket…</div>');
+  let c;
+  try { c = await ticketPedidoImagen(p, etapaTxt); }
+  catch (err) { cerrarHoja(); return aviso("No se pudo generar el ticket: " + err.message, "mal"); }
+  const url = c.toDataURL("image/png");
+  const blob = await new Promise(r => c.toBlob(r, "image/png"));
+  const nombre = "Ticket-" + String(p.folio || "pedido").replace(/[^\w-]/g, "") + ".png";
+  const archivo = blob ? new File([blob], nombre, { type: "image/png" }) : null;
+  const puedeCompartir = !!(archivo && navigator.canShare && navigator.canShare({ files: [archivo] }));
+  const puedeCopiar = !!(blob && navigator.clipboard && window.ClipboardItem);
+  const tel = String(p.telefono || "").replace(/\D/g, "");
+  hoja('<h2 style="margin-bottom:8px">Ticket ' + esc(p.folio) + "</h2>" +
+    '<img src="' + url + '" alt="Ticket del pedido ' + esc(p.folio) + '" class="ticket-img">' +
+    (puedeCompartir ? '<button class="btn lleno verde" id="tk-compartir" style="margin-top:12px">📤 Compartir (WhatsApp…)</button>' : "") +
+    '<a class="btn lleno ' + (puedeCompartir ? "claro" : "verde") + '" style="margin-top:8px;text-decoration:none;display:flex;justify-content:center;align-items:center;width:100%;box-sizing:border-box" href="' + url + '" download="' + nombre + '">⬇️ Guardar imagen</a>' +
+    (puedeCopiar ? '<button class="btn lleno claro" id="tk-copiar" style="margin-top:8px">📋 Copiar imagen</button>' : "") +
+    (tel.length >= 10 ? '<a class="btn lleno claro" style="margin-top:8px;text-decoration:none;display:flex;justify-content:center;align-items:center;width:100%;box-sizing:border-box" target="_blank" rel="noopener" href="https://wa.me/' + (tel.length === 10 ? "52" + tel : tel) +
+      "?text=" + encodeURIComponent("Hola " + String(p.cliente || "").split(" ")[0] + ", te comparto el ticket de tu pedido " + p.folio + " 🧾") + '">💬 Abrir chat de ' + esc(String(p.cliente || "").split(" ")[0]) + "</a>" : "") +
+    '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>' +
+    '<p class="tenue" style="font-size:12px;margin:8px 0 0">Guarda o copia la imagen y luego adjúntala en el chat de la clienta.</p>');
+  if ($("#tk-compartir")) $("#tk-compartir").onclick = async () => {
+    try { await navigator.share({ files: [archivo], title: "Ticket " + p.folio }); }
+    catch (err) { if (err && err.name !== "AbortError") aviso("No se pudo compartir; usa Guardar imagen", "mal"); }
+  };
+  if ($("#tk-copiar")) $("#tk-copiar").onclick = async () => {
+    try { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); aviso("Imagen copiada ✓ Pégala en el chat (Ctrl+V)", "bien"); }
+    catch { aviso("Tu navegador no dejó copiar; usa Guardar imagen", "mal"); }
+  };
+}
+
 VISTAS.pedidos = async () => {
   if (E.yo.rol === "cliente") return pedidosCliente();
-  const filtros = [["", "Todos"], ["preparando", "Por preparar"], ["almacenado", "Almacenado en bodega"],
-                   ["por_cobrar", "Pendiente por cobrar"], ["cobrado", "Cobrado"]];
+  const filtros = [["", "Todos"], ["preparando", "Preparando tu pedido"], ["por_cobrar", "Separado / por cobrar"],
+                   ["cobrado", "Cobrado / almacenado"]];
   let filtro = E.datos.filtroPedido || "";
   if (!filtros.some(f => f[0] === filtro)) filtro = E.datos.filtroPedido = "";
   const [d, etapas] = await Promise.all([rpc("admin_pedidos", { p_token: E.token, p_estado: "" }), leerEtapas("admin_pedidos_etapas")]);
-  const et_ = p => (etapas && etapas[p.id] && p.estado !== "cancelado") ? etapas[p.id].etapa : null;
+  const et_ = p => {
+    const e = (etapas && etapas[p.id] && p.estado !== "cancelado") ? etapas[p.id].etapa : null;
+    return e === "almacenado" ? "cobrado" : e;
+  };
   const pasa = (p, f) => !f ? true
     : f === "preparando" ? p.estado === "preparando" && !et_(p)
     : et_(p) === f;
   const lista = d.items.filter(p => pasa(p, filtro));
   $("#vista").innerHTML =
-    (etapas === null ? '<div class="mensaje rojo">Falta correr <b>pedidos_etapas.sql</b> en Supabase para usar Almacenado / Pendiente por cobrar / Cobrado.</div>' : "") +
+    (etapas === null ? '<div class="mensaje rojo">Falta correr <b>pedidos_etapas.sql</b> en Supabase para usar Separado / por cobrar y Cobrado / almacenado.</div>' : "") +
     '<div class="filtros">' + filtros.map(f =>
       '<button data-f="' + f[0] + '" aria-current="' + (filtro === f[0]) + '">' + f[1] +
         (f[0] ? " (" + d.items.filter(p => pasa(p, f[0])).length + ")" : "") + "</button>").join("") + "</div>" +
@@ -4748,12 +4889,17 @@ VISTAS.pedidos = async () => {
         (ee && ee.en ? '<p class="tenue" style="margin:2px 0 0">' + esc(ETAPA_PEDIDO[ee.etapa] ? ETAPA_PEDIDO[ee.etapa][0] : ee.etapa) + " desde " + fecha(ee.en) + (ee.por ? " · " + esc(ee.por) : "") + "</p>" : "") +
         '<div class="fila envolver linea-arriba">' +
           '<button class="btn chico" data-gestionar="' + p.id + '">Actualizar</button>' +
+          '<button class="btn kraft chico" data-ticket-ped="' + p.id + '">🧾 Ticket</button>' +
           (tel ? '<a class="btn claro chico" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/' + tel +
             "?text=" + encodeURIComponent("Hola " + p.cliente + ", sobre tu pedido " + p.folio + ": ") + '">WhatsApp</a>' : "") +
         "</div></div>";
     }).join("") || '<div class="vacio"><h3>Sin pedidos en este filtro</h3></div>');
 
   $$("[data-f]").forEach(b => b.onclick = () => { E.datos.filtroPedido = b.dataset.f; pintar(); });
+  $$("[data-ticket-ped]").forEach(b => b.onclick = () => {
+    const p = d.items.find(x => String(x.id) === b.dataset.ticketPed);
+    if (p) verTicketPedido(p, etiquetaPedido(p, etapas)[0]);
+  });
   $$("[data-no-alcanzo]").forEach(b => b.onclick = async () => {
     const motivo = prompt("¿Qué le decimos al cliente? (se le devuelve el importe a su saldo)", "No alcanzó mercancía");
     if (motivo === null) return;
@@ -4767,8 +4913,8 @@ VISTAS.pedidos = async () => {
   $$("[data-gestionar]").forEach(b => b.onclick = () => {
     const p = d.items.find(x => x.id === b.dataset.gestionar);
     const actual = p.estado === "cancelado" ? "cancelado" : (et_(p) || p.estado);
-    const opciones = [["preparando", "Por preparar"], ["almacenado", "Almacenado en bodega"], ["por_cobrar", "Pendiente por cobrar"],
-                      ["cobrado", "Cobrado"], ["cancelado", "Cancelado (regresa mercancía y saldo)"]];
+    const opciones = [["preparando", "Preparando tu pedido"], ["por_cobrar", "Separado / por cobrar"],
+                      ["cobrado", "Cobrado / almacenado"], ["cancelado", "Cancelar pedido (regresa mercancía y saldo)"]];
     if (!opciones.some(o => o[0] === actual)) opciones.unshift([actual, (ESTADO_PEDIDO[actual] || [actual])[0]]);
     hoja("<h2>" + esc(p.folio) + "</h2>" +
       '<label class="campo"><span>Estado</span><select id="g-estado">' +
