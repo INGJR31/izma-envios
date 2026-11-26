@@ -701,15 +701,58 @@ async function activarNotificaciones(on) {
     beep();   // desbloquea el audio y confirma que suena
   }
 }
-function notificar(texto) {
-  if (!notifActiva()) return;
-  beep();
+/* Notificaciones del sistema (barra del celular). Usan sw.js si está subido junto al index. */
+let _swReg = null;
+(function () {
   try {
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("IZMA ENVÍOS", { body: texto, icon: "", tag: "izma" });
+    if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
+      navigator.serviceWorker.register("sw.js").then(r => { _swReg = r; }).catch(() => { });
+      navigator.serviceWorker.addEventListener("message", e => {
+        const v = e.data && e.data.izma_ir;
+        if (v && E.yo && typeof ir === "function") ir(v);
+      });
     }
   } catch { }
+})();
+function permisoNotif() { try { return "Notification" in window ? Notification.permission : "no"; } catch { return "no"; } }
+async function mostrarNotif(titulo, texto, vista, tag) {
+  if (permisoNotif() !== "granted") return false;
+  const op = { body: texto, tag: tag || "izma", renotify: true, data: { vista: vista || "" } };
+  try {
+    const reg = _swReg || (navigator.serviceWorker && await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 1500))]));
+    if (reg && reg.showNotification) { await reg.showNotification(titulo, op); return true; }
+  } catch { }
+  try {
+    const n = new Notification(titulo, op);
+    n.onclick = () => { try { window.focus(); } catch { } if (vista && E.yo) ir(vista); n.close(); };
+    return true;
+  } catch { return false; }
 }
+async function pedirPermisoNotif() {
+  if (permisoNotif() !== "default") return permisoNotif();
+  try { const r = await Notification.requestPermission(); if (r === "granted") almacen.set("izma_notif", "1"); return r; } catch { return "no"; }
+}
+function notificar(texto, vista) {
+  if (!notifActiva()) return;
+  beep();
+  mostrarNotif("IZMA ENVÍOS", texto, vista || "", "izma");
+}
+/* Recordatorio para completar el perfil: al entrar y cada 10 minutos mientras le falte algo */
+function recordarPerfil(forzar) {
+  if (!E.yo || E.yo.rol !== "cliente" || E.previendo) return;
+  const terms = typeof terminosPendientes === "function" && terminosPendientes();
+  const falt = typeof perfilPendiente === "function" && perfilPendiente();
+  if (!terms && !falt) return;
+  let ult = 0; try { ult = +sessionStorage.getItem("izma_rec_perfil") || 0; } catch { }
+  if (!forzar && Date.now() - ult < 10 * 60000) return;
+  try { sessionStorage.setItem("izma_rec_perfil", String(Date.now())); } catch { }
+  const nombre = String(E.yo.nombre || "").split(" ")[0];
+  const texto = terms
+    ? nombre + ", acepta los términos y completa tu perfil para poder apartar y comprar en IZMA."
+    : nombre + ", completa tu perfil para seguir comprando ✈️ Te falta: " + E.yo.faltan.map(f => FALTA_TXT[f] || f).join(", ") + ".";
+  mostrarNotif("📋 Completa tu perfil · IZMA", texto, "cuenta", "izma-perfil");
+}
+setInterval(() => recordarPerfil(false), 60000);
 
 /* ===== Entrada con huella / Face ID (desbloqueo en este aparato) ===== */
 function bioDisponible() { return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create); }
@@ -3073,6 +3116,10 @@ function arrancarApp() {
     pintar(yLugar);
     iniciarLatido();
     if (esCli && !terminosPendientes()) setTimeout(gpsInvitar, 1500);
+    if (esCli) setTimeout(() => recordarPerfil(true), 2500);
+    // abierta desde una notificación (#ir=cuenta)
+    const mh = String(location.hash || "").match(/ir=(\w+)/);
+    if (mh) { try { history.replaceState(null, "", location.pathname + location.search); } catch { } if (vistasPermitidas().includes(mh[1])) ir(mh[1]); }
   });
 }
 function vistasPermitidas() {
@@ -7014,7 +7061,7 @@ function pintarBloqueo(tipo) {
       '<label class="acepto"><input type="checkbox" id="t-acepto"> Acepto los <b>Términos y condiciones</b> y el <b>Aviso de privacidad</b>.</label>' +
       '<label class="acepto"><input type="checkbox" id="t-ubic"> Acepto el <b>uso de mi ubicación</b> para verificar mi identidad, prevenir fraudes y mis envíos.</label>' +
       '<button class="btn lleno verde" id="t-ok" disabled style="margin-top:10px">Aceptar y continuar</button>' +
-      '<button class="btn lleno claro" style="margin-top:8px" data-salir>No acepto · Salir</button></div>';
+      '<button class="btn lleno claro" style="margin-top:8px" data-salir>No acepto · Salir</button>' + botonAvisos() + "</div>";
     const chk = ["#t-mayor", "#t-acepto", "#t-ubic"].map(x => $(x));
     chk.forEach(c => c.onchange = () => { $("#t-ok").disabled = !chk.every(x => x.checked); });
     $("#t-ok").onclick = async () => {
@@ -7039,8 +7086,19 @@ function pintarBloqueo(tipo) {
     '<div class="tenue" style="margin:-4px 0 10px;font-weight:600">' + hechos + " de " + pasos.length + " listos</div>" +
     '<div class="checklist" style="text-align:left">' + pasos.map(f => '<div class="' + (falt.includes(f) ? "pend" : "hecho") + '">' +
       (falt.includes(f) ? "⬜ " : "✅ ") + esc(FALTA_TXT[f]) + "</div>").join("") + "</div>" +
-    '<button class="btn lleno verde" style="margin-top:14px" data-vista="cuenta">Completar mi perfil ahora</button></div>';
+    '<button class="btn lleno verde" style="margin-top:14px" data-vista="cuenta">Completar mi perfil ahora</button>' + botonAvisos() + "</div>";
 }
+function botonAvisos() {
+  return permisoNotif() === "default"
+    ? '<button class="btn lleno claro" style="margin-top:8px" data-activar-avisos>🔔 Activar notificaciones</button>' : "";
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-activar-avisos]"); if (!b) return;
+  b.disabled = true;
+  const r = await pedirPermisoNotif();
+  if (r === "granted") { aviso("Notificaciones activadas ✓", "bien"); b.remove(); recordarPerfil(true); }
+  else { aviso("No se activaron. Puedes permitirlas en los ajustes del navegador.", "mal"); b.disabled = false; }
+});
 
 /* ===================== 17. avatares y perfil ===================== */
 function iniciales(n) {
