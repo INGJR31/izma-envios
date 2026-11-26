@@ -79,9 +79,12 @@ button{cursor:pointer}
 .nav button[aria-current="true"]{background:#fff;color:var(--tinta);border-color:#fff}
 .nav button[data-salir]{margin-left:auto;border-color:rgba(192,57,43,.7);color:#F0A9A2}
 .nav button[data-salir]:hover{background:var(--sello);color:#fff;border-color:var(--sello)}
-@media (max-width:520px){
-  .nav{gap:5px}
-  .nav button{padding:7px 11px;font-size:13px}
+@media (max-width:700px){
+  /* En celular/tablet chica: menú en UN renglón que se desliza con el dedo (no tapa media pantalla) */
+  .nav{gap:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+       padding:0 14px 10px;scroll-padding:0 14px;mask-image:linear-gradient(90deg,#000 88%,transparent);-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}
+  .nav::-webkit-scrollbar{display:none}
+  .nav button{padding:7px 12px;font-size:13px;flex:0 0 auto}
   .nav button[data-salir]{margin-left:0}
 }
 .nav .globo{background:var(--sello);color:#fff;border-radius:999px;padding:1px 6px;margin-left:6px;font-size:11px;font-weight:600;font-style:normal}
@@ -244,6 +247,53 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
 .ticket .corte{border-top:2px dashed var(--linea);margin-top:12px;padding-top:12px}
 .ticket .final{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--linea);margin-top:8px;padding-top:8px}
 .ticket .final b{font-size:26px;font-variant-numeric:tabular-nums}
+
+/* ===== Avatares, chat y conectados ===== */
+.ava{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-weight:700;
+  object-fit:cover;flex:none;line-height:1;letter-spacing:.3px;background:#7a8590;overflow:hidden}
+.chat-caja{background:var(--tarjeta);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra);
+  display:flex;flex-direction:column;height:calc(100dvh - 210px);min-height:420px;overflow:hidden}
+.chat-cab{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--linea)}
+.chat-cab h2{font-size:20px}
+.chat-linea{display:flex;gap:10px;overflow-x:auto;padding:8px 14px;border-bottom:1px solid var(--linea);scrollbar-width:none;min-height:66px}
+.chat-linea::-webkit-scrollbar{display:none}
+.chat-linea button{border:0;background:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font:inherit;font-size:11px;color:var(--tinta-2);cursor:pointer;max-width:58px}
+.chat-linea button span.n{max-width:58px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.punto-en{position:relative;display:inline-flex}
+.punto-en::after{content:"";position:absolute;right:0;bottom:0;width:11px;height:11px;border-radius:50%;background:#16a34a;border:2px solid #fff}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px 10px;background:#F6F8F7;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.msg{display:flex;gap:7px;align-items:flex-end;margin:6px 0;max-width:100%}
+.msg.yo{justify-content:flex-end}
+.msg-ava{border:0;background:none;padding:0;cursor:pointer;flex:none}
+.burbuja{max-width:min(78%,520px);background:#fff;border:1px solid var(--linea);border-radius:14px 14px 14px 4px;padding:7px 10px 5px;
+  box-shadow:0 1px 1px rgba(20,24,27,.05);min-width:0}
+.msg.yo .burbuja{background:#DCF5E5;border-color:#bfe6cd;border-radius:14px 14px 4px 14px}
+.burbuja.admin{border-color:#9fd3b4;background:#F0FAF4}
+.msg-nom{font-size:12px;font-weight:700;color:var(--verde);margin-bottom:2px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.msg-txt{white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;font-size:15px;line-height:1.35;color:var(--tinta)}
+.msg-hora{font-size:11px;color:var(--tinta-3);text-align:right;margin-top:2px}
+.msg-borrar{border:0;background:none;color:var(--sello);font:inherit;font-size:11px;cursor:pointer;padding:0}
+.chat-dia{text-align:center;margin:10px 0}
+.chat-dia span{background:#E6ECEA;color:var(--tinta-2);font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px}
+.chat-escribir{display:flex;gap:8px;align-items:flex-end;padding:10px;border-top:1px solid var(--linea);background:#fff}
+.chat-escribir textarea{flex:1 1 auto;min-width:0;width:auto;resize:none;border:1px solid var(--linea);border-radius:20px;padding:10px 14px;font:inherit;
+  font-size:16px;max-height:120px;min-height:44px;line-height:1.3;background:#fff;color:var(--tinta);margin:0}
+.chat-escribir .btn{flex:0 0 auto;width:auto;border-radius:20px;min-width:84px;margin:0;padding:11px 16px}
+.etiq-rol{font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--verde);color:#fff}
+.etiq-rol.vend{background:#5C6270}
+.con-fila{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--linea)}
+.con-fila:last-child{border-bottom:0}
+.con-fila .crece{min-width:0}
+.con-fila .det{font-size:13px;color:var(--tinta-2);overflow-wrap:anywhere}
+.estado-en{font-size:12px;font-weight:700;color:#0a7a35;white-space:nowrap}
+.estado-fuera{font-size:12px;color:var(--tinta-3);white-space:nowrap}
+#mapa-con{height:360px;background:#e9eef0}
+@media (max-width:520px){
+  .chat-caja{height:calc(100dvh - 250px);min-height:380px;border-radius:0;margin:0 -14px;border-left:0;border-right:0}
+  .burbuja{max-width:84%}
+  #mapa-con{height:300px}
+}
 </style>
 </head>
 <body>
@@ -266,7 +316,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
       <div id="claves-demo"></div>
       <button type="button" class="btn claro" id="btn-instalar" style="margin-top:12px;width:100%">📲 Instalar app en mi celular</button>
     </form>
-    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-i</span></footer>
+    <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-j</span></footer>
     <form id="form-solicitar" hidden>
       <div class="mensaje info">Llena tus datos. IZMA los revisa y te envía tu usuario y PIN por WhatsApp.</div>
       <label class="campo"><span>Nombre completo</span><input name="nombre" required></label>
@@ -305,7 +355,7 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
     <nav class="nav" id="nav"></nav>
   </header>
   <main id="vista"><div class="cargando">Cargando…</div></main>
-  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-i</span></footer>
+  <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-j</span></footer>
 </div>
 
 <div id="avisos"></div>
@@ -771,6 +821,28 @@ function exige(token, roles) {
   if (roles && !roles.includes(u.rol)) throw new Error("SIN_PERMISO");
   return u;
 }
+/* Demo: presencia y chat (con algunos conectados de ejemplo) */
+function demoSocial() {
+  if (BD.presencia && BD.chat) return;
+  BD.presencia = BD.presencia || {};
+  BD.chat = BD.chat || [];
+  BD.chat_seq = BD.chat_seq || 0;
+  const por = us => BD.usuarios.find(x => x.usuario === us);
+  [["maria", "celular", "Android", "Chrome", "Tijuana", "Baja California", 32.51, -117.04],
+   ["jose", "tablet", "iOS", "Safari", "Monterrey", "Nuevo León", 25.67, -100.31],
+   ["vendedor", "computadora", "Windows", "Chrome", "Ciudad de México", "CDMX", 19.43, -99.13]].forEach(s => {
+    const u = por(s[0]);
+    if (u) BD.presencia[u.id] = { dispositivo: s[1], sistema: s[2], navegador: s[3], ciudad: s[4], region: s[5],
+                                  pais: "México", lat: s[6], lon: s[7], vista: "bodega", ultimo: ahora() };
+  });
+  const adm = por("admin"), mar = por("maria");
+  if (adm) BD.chat.push({ id: ++BD.chat_seq, usuario_id: adm.id, nombre: adm.nombre, rol: "admin", foto: null,
+    texto: "¡Bienvenidos al chat de IZMA! Aquí avisamos cuando llega mercancía 📦", creado_en: ahora(), borrado: false });
+  if (mar) BD.chat.push({ id: ++BD.chat_seq, usuario_id: mar.id, nombre: mar.nombre, rol: "cliente", foto: null,
+    texto: "¡Hola! ¿Hoy hay venta en vivo?", creado_en: ahora(), borrado: false });
+  guardarBD();
+}
+const enLineaDemo = p => p && Date.now() - new Date(p.ultimo).getTime() < 180000;
 function liberar() {
   const t = Date.now();
   BD.apartados.filter(a => a.estado === "activo" && new Date(a.expira_en) <= t).forEach(a => {
@@ -912,6 +984,84 @@ const LOCAL = {
     return { ok: true, token };
   },
   salir({ p_token }) { BD.sesiones = BD.sesiones.filter(s => s.token !== p_token); guardarBD(); return { ok: true }; },
+  latido({ p_token, p_dispositivo, p_sistema, p_navegador, p_ciudad, p_region, p_pais, p_lat, p_lon, p_vista, p_chat_visto }) {
+    const u = usuarioDe(p_token); if (!u) return { ok: false, motivo: "SESION_INVALIDA" };
+    demoSocial();
+    if (!u.oculto) {
+      const a = BD.presencia[u.id] || {};
+      BD.presencia[u.id] = {
+        dispositivo: p_dispositivo || a.dispositivo, sistema: p_sistema || a.sistema, navegador: p_navegador || a.navegador,
+        ciudad: p_ciudad || a.ciudad, region: p_region || a.region, pais: p_pais || a.pais,
+        lat: p_lat != null ? p_lat : a.lat, lon: p_lon != null ? p_lon : a.lon, vista: p_vista || a.vista, ultimo: ahora() };
+    }
+    const nuevos = BD.chat.filter(m => !m.borrado && m.id > (Number(p_chat_visto) || 0) && m.usuario_id !== u.id).length;
+    guardarBD();
+    return { ok: true, chat_nuevos: nuevos, foto: u.foto || null };
+  },
+  presencia_salir({ p_token }) {
+    const u = usuarioDe(p_token); demoSocial();
+    if (u && BD.presencia[u.id]) { BD.presencia[u.id].ultimo = new Date(Date.now() - 600000).toISOString(); guardarBD(); }
+    return { ok: true };
+  },
+  admin_conectados({ p_token, p_horas }) {
+    exige(p_token, ["admin"]); demoSocial();
+    const lim = Date.now() - Math.max(1, Math.min(720, Number(p_horas) || 24)) * 3600000;
+    const items = Object.keys(BD.presencia).map(id => {
+      const p = BD.presencia[id], u = BD.usuarios.find(x => x.id === id);
+      if (!u || u.oculto || u.estado === "eliminado" || new Date(p.ultimo).getTime() < lim) return null;
+      return Object.assign({ id, nombre: u.nombre, usuario: u.usuario, rol: u.rol, tipo_cliente: u.tipo_cliente, foto: u.foto || null },
+                           p, { en_linea: enLineaDemo(p) });
+    }).filter(Boolean).sort((a, b) => String(b.ultimo).localeCompare(String(a.ultimo)));
+    return { ok: true, items, ahora: ahora() };
+  },
+  chat_leer({ p_token, p_desde }) {
+    const u = exige(p_token); demoSocial();
+    const desde = Number(p_desde) || 0;
+    const mensajes = BD.chat.filter(m => !m.borrado && m.id > desde).slice(-100).map(m => {
+      const a = BD.usuarios.find(x => x.id === m.usuario_id);
+      const oc = a && a.oculto;
+      return { id: m.id, usuario_id: oc ? null : m.usuario_id, nombre: oc ? "Administración" : (a ? a.nombre : m.nombre),
+               rol: oc ? "admin" : (a ? a.rol : m.rol), foto: oc ? null : ((a && a.foto) || m.foto || null),
+               texto: m.texto, creado_en: m.creado_en, mio: m.usuario_id === u.id };
+    });
+    const max = BD.chat.reduce((x, m) => Math.max(x, m.id), 0);
+    const borrados = BD.chat.filter(m => m.borrado && m.id > max - 300).map(m => m.id);
+    const en_linea = Object.keys(BD.presencia).map(id => {
+      const a = BD.usuarios.find(x => x.id === id);
+      return a && !a.oculto && a.estado === "activo" && enLineaDemo(BD.presencia[id]) ? { id, nombre: a.nombre, rol: a.rol, foto: a.foto || null } : null;
+    }).filter(Boolean).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return { ok: true, mensajes, borrados, en_linea };
+  },
+  chat_enviar({ p_token, p_texto }) {
+    const u = exige(p_token); demoSocial();
+    const t = String(p_texto || "").trim();
+    if (!t) return { ok: false, motivo: "Escribe un mensaje" };
+    if (t.length > 1000) return { ok: false, motivo: "El mensaje es muy largo (máximo 1000 letras)" };
+    const ult = BD.chat.filter(m => m.usuario_id === u.id).pop();
+    if (ult && Date.now() - new Date(ult.creado_en).getTime() < 2000) return { ok: false, motivo: "Espera un segundo antes de mandar otro" };
+    const m = { id: ++BD.chat_seq, usuario_id: u.id, nombre: u.oculto ? "Administración" : u.nombre, rol: u.oculto ? "admin" : u.rol,
+                foto: u.oculto ? null : (u.foto || null), texto: t, creado_en: ahora(), borrado: false };
+    BD.chat.push(m); guardarBD();
+    return { ok: true, id: m.id };
+  },
+  chat_borrar({ p_token, p_id }) {
+    const u = exige(p_token); demoSocial();
+    const m = BD.chat.find(x => x.id === Number(p_id));
+    if (!m || !(u.rol === "admin" || m.usuario_id === u.id)) return { ok: false, motivo: "No puedes borrar ese mensaje" };
+    m.borrado = true; guardarBD();
+    return { ok: true };
+  },
+  mi_perfil({ p_token }) {
+    const u = exige(p_token);
+    return { ok: true, nombre: u.nombre, usuario: u.usuario, rol: u.rol, foto: u.foto || null };
+  },
+  actualizar_mi_foto({ p_token, p_foto }) {
+    const u = exige(p_token);
+    const f = String(p_foto || "").trim();
+    if (f && !/^(https?:|data:image\/)/.test(f)) return { ok: false, motivo: "Foto no válida" };
+    u.foto = f || null; guardarBD();
+    return { ok: true, foto: u.foto };
+  },
   cambiar_pin({ p_token, p_pin_hash_nuevo, p_pin_hash_actual }) {
     const u = exige(p_token);
     if (p_pin_hash_actual) confirmaPin(u, p_pin_hash_actual);
@@ -2402,10 +2552,10 @@ function colorEspacio(s) { s = String(s || "—"); let h = 0; for (let i = 0; i 
 
 const MENUS = {
   cliente: [["bodega", "Bodega"], ["carrito", "Mi carrito"], ["saldo", "Mi saldo"], ["pedidos", "Mis compras"],
-            ["almacen", "Mi bodega"], ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
+            ["almacen", "Mi bodega"], ["recolectar", "Recolección"], ["chat", "💬 Chat"], ["cuenta", "Mi cuenta"]],
   vendedor: [["ventas", "Mis ventas"], ["publicar", "Subir producto"], ["inventario", "Lo que subí"],
-             ["recolectar", "Recolección"], ["cuenta", "Mi cuenta"]],
-  admin: [["resumen", "Resumen"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
+             ["recolectar", "Recolección"], ["chat", "💬 Chat"], ["cuenta", "Mi cuenta"]],
+  admin: [["resumen", "Resumen"], ["conectados", "🟢 Conectados"], ["chat", "💬 Chat"], ["solicitudes", "Solicitudes"], ["pagos", "Depósitos"], ["pedidos", "Pedidos"],
           ["almacen", "Bodega"], ["tienda_local", "LOCAL IZMA"], ["envios", "Envíos"], ["recolectar", "Recolección"], ["ventas", "Ventas"], ["publicar", "Subir producto"], ["productos", "Productos"],
           ["usuarios", "Clientes"], ["equipo", "Equipo"], ["bitacora", "Bitácora"], ["ajustes", "Ajustes"], ["cuenta", "Mi cuenta"]]
 };
@@ -2440,13 +2590,18 @@ function pintarNav() {
     if (id === "solicitudes" && E.datos.pendSol) globo = '<i class="globo num">' + E.datos.pendSol + "</i>";
     if (id === "pagos" && E.datos.pendAbonos) globo = '<i class="globo num">' + E.datos.pendAbonos + "</i>";
     if (id === "actividad" && E.datos.nuevas) globo = '<i class="globo num">' + E.datos.nuevas + "</i>";
+    if (id === "chat" && E.datos.chatNuevos && E.vista !== "chat") globo = '<i class="globo num">' + (E.datos.chatNuevos > 99 ? "99+" : E.datos.chatNuevos) + "</i>";
     return '<button data-vista="' + id + '" aria-current="' + (E.vista === id) + '">' + t + globo + "</button>";
   }).join("") + '<button data-salir>Salir</button>';
+  // En celular: centrar el botón de la pantalla actual en el renglón deslizable
+  const nav = $("#nav"), act = nav.querySelector('[aria-current="true"]');
+  if (act && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, act.offsetLeft - nav.clientWidth / 2 + act.offsetWidth / 2);
 }
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-vista]");
   if (b) { cerrarHoja(); ir(b.dataset.vista); return; }
   if (e.target.closest("[data-salir]")) {
+    if (!E.previendo) { try { await rpc("presencia_salir", { p_token: E.token }); } catch {} }
     try { await rpc("salir", { p_token: E.token }); } catch {}
     salirLocal();
     return;
@@ -2548,18 +2703,58 @@ function arrancarApp() {
   $("#app").hidden = false;
   $("#cinta-demo").hidden = !MODO_DEMO;
   E.vista = yoSoyPosLocal() ? "pos" : { cliente: "bodega", vendedor: "publicar", admin: "resumen" }[E.yo.rol];
+  E._pintada = null;
+  // Regresar a donde iba (si el celular recargó la página)
+  let yLugar;
+  const l = E.previendo ? null : lugarGuardado();
+  if (l && VISTAS[l.v] && vistasPermitidas().includes(l.v)) { E.vista = l.v; yLugar = l.y || 0; }
   pintarNav();
   pintarBannerPreview();
-  pintar();
+  pintar(yLugar);
+  iniciarLatido();
 }
-async function pintar() {
+function vistasPermitidas() {
+  if (!E.yo) return [];
+  if (yoSoyPosLocal()) return ["pos", "pos_ventas", "cuenta"];
+  const base = (MENUS[E.yo.rol] || []).map(m => m[0]);
+  if (E.yo.rol === "cliente" && yoVeoLocal()) base.push("local");
+  return base;
+}
+/* Recordar en qué pantalla y en qué parte iba cada quien (para que no se reinicie) */
+function guardarLugar() {
+  if (!E.yo || E.previendo) return;
+  try { localStorage.setItem("izma_lugar", JSON.stringify({ u: E.yo.usuario, v: E.vista, y: Math.round(window.scrollY), t: Date.now() })); } catch { }
+}
+function lugarGuardado() {
+  try {
+    const l = JSON.parse(localStorage.getItem("izma_lugar") || "null");
+    if (!l || !E.yo || l.u !== E.yo.usuario || Date.now() - l.t > 6 * 3600000) return null;
+    return l;
+  } catch { return null; }
+}
+let _tGuardar = 0;
+window.addEventListener("scroll", () => {
+  clearTimeout(_tGuardar);
+  _tGuardar = setTimeout(guardarLugar, 400);
+}, { passive: true });
+
+async function pintar(irAY) {
   const v = $("#vista");
-  v.innerHTML = '<div class="cargando">Cargando…</div>';
+  const mismo = E._pintada === E.vista;
+  const y = window.scrollY;
+  if (mismo) v.style.minHeight = v.offsetHeight + "px";      // que la página no se encoja (no te sube)
+  else v.innerHTML = '<div class="cargando">Cargando…</div>';
   try { await VISTAS[E.vista](); }
   catch (err) {
     v.innerHTML = '<div class="tarjeta"><div class="mensaje rojo">' + esc(err.message) +
       '</div><button class="btn claro" data-vista="' + E.vista + '">Intentar otra vez</button></div>';
   }
+  v.style.minHeight = "";
+  E._pintada = E.vista;
+  if (typeof irAY === "number") window.scrollTo(0, irAY);
+  else if (mismo) window.scrollTo(0, y);
+  else window.scrollTo(0, 0);
+  guardarLugar();
 }
 
 /* ===================== 8. cliente: bodega y carrito ===================== */
@@ -3411,7 +3606,18 @@ async function pedidosCliente() {
 VISTAS.cuenta = async () => {
   const rolTexto = E.yo.rol === "cliente"
     ? (E.yo.tipo_cliente === "foraneo" ? "cliente foráneo" : "cliente local") : esc(E.yo.rol);
+  try { const pf = await rpc("mi_perfil", { p_token: E.token }); if (pf && pf.ok) E.yo.foto = pf.foto || null; } catch { }
   $("#vista").innerHTML =
+    '<div class="tarjeta"><h2>Mi perfil</h2>' +
+      '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">' +
+        '<div id="mi-ava">' + avatar(E.yo.nombre, E.yo.foto, 76) + "</div>" +
+        '<div class="crece" style="min-width:180px"><b style="font-size:18px">' + esc(E.yo.nombre) + "</b>" +
+          '<div class="tenue">Tu foto se ve en el chat y en tu perfil.</div>' +
+          '<div class="fila envolver" style="margin-top:8px">' +
+            '<label class="btn kraft chico" style="cursor:pointer">📷 ' + (E.yo.foto ? "Cambiar foto" : "Poner foto") +
+              '<input type="file" id="foto-perfil" accept="image/*" hidden></label>' +
+            (E.yo.foto ? '<button class="btn claro chico" id="foto-quitar">Quitar foto</button>' : "") +
+          "</div></div></div></div>" +
     '<div class="tarjeta"><h2>Mis datos</h2>' +
       '<p class="tenue">Usuario <b>' + esc(E.yo.usuario) + "</b> · " + rolTexto + "</p>" +
       '<div class="dos">' +
@@ -3444,6 +3650,27 @@ VISTAS.cuenta = async () => {
       try { await bioRegistrar(E.yo.usuario, E.token); aviso("Listo. Ya puedes entrar con huella / Face ID", "bien"); }
       catch (err) { swB.checked = false; aviso("No se pudo activar: " + (err.message || "cancelado"), "mal"); }
     } else { almacen.del("izma_bio"); aviso("Huella / Face ID desactivado", "bien"); }
+  };
+  const fotoIn = $("#foto-perfil");
+  if (fotoIn) fotoIn.onchange = async () => {
+    const f = fotoIn.files && fotoIn.files[0];
+    if (!f) return;
+    if (!/^image\//.test(f.type)) return aviso("Elige una imagen", "mal");
+    $("#mi-ava").innerHTML = '<div class="tenue" style="width:76px;text-align:center">Subiendo…</div>';
+    try {
+      const chica = await comprimir(f, 480, 0.85);
+      const up = await subir(chica);
+      const r = await rpc("actualizar_mi_foto", { p_token: E.token, p_foto: up.url });
+      if (!r.ok) throw new Error(r.motivo || "No se pudo guardar la foto");
+      E.yo.foto = r.foto; aviso("Foto de perfil lista ✓", "bien"); pintar();
+    } catch (err) { aviso(err.message, "mal"); pintar(); }
+  };
+  if ($("#foto-quitar")) $("#foto-quitar").onclick = async () => {
+    try {
+      const r = await rpc("actualizar_mi_foto", { p_token: E.token, p_foto: "" });
+      if (!r.ok) throw new Error(r.motivo);
+      E.yo.foto = null; aviso("Foto quitada", "bien"); pintar();
+    } catch (err) { aviso(err.message, "mal"); }
   };
   $("#guardar").onclick = async () => {
     try {
@@ -5694,6 +5921,322 @@ setInterval(async () => {
   } catch {}
 }, 30000);
 
+/* ===================== 16. presencia (quién está conectado) ===================== */
+function detectarDispositivo() {
+  const ua = navigator.userAgent || "";
+  const ipadNuevo = navigator.maxTouchPoints > 1 && /Macintosh/.test(ua);
+  const tablet = ipadNuevo || /iPad|Tablet|PlayBook|Silk|Kindle/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua));
+  const cel = !tablet && /Mobi|iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua);
+  const sistema = (/iPhone|iPad|iPod/i.test(ua) || ipadNuevo) ? "iOS" : /Android/i.test(ua) ? "Android"
+    : /Windows/i.test(ua) ? "Windows" : /Mac OS X|Macintosh/i.test(ua) ? "Mac" : /CrOS/.test(ua) ? "Chromebook" : /Linux/i.test(ua) ? "Linux" : "Otro";
+  const nav = /Edg\//.test(ua) ? "Edge" : /SamsungBrowser/.test(ua) ? "Samsung Internet" : /OPR\//.test(ua) ? "Opera"
+    : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Otro";
+  const app = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  return { dispositivo: tablet ? "tablet" : cel ? "celular" : "computadora", sistema, navegador: nav + (app ? " · app instalada" : "") };
+}
+function iconoAparato(d) { return d === "celular" ? "📱" : d === "tablet" ? "📲" : d === "computadora" ? "💻" : "❔"; }
+/* Ciudad aproximada por la conexión a internet (no GPS). Se pide una vez por sesión. */
+async function ubicacionAprox() {
+  try { const c = JSON.parse(sessionStorage.getItem("izma_geo") || "null"); if (c) return c; } catch { }
+  const pedir = async (url, mapa) => {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 4500);
+    try { const r = await fetch(url, { signal: ctl.signal, cache: "no-store" }); if (!r.ok) return null; return mapa(await r.json()); }
+    catch { return null; } finally { clearTimeout(t); }
+  };
+  let g = await pedir("https://ipwho.is/", d => (d && d.success !== false && d.latitude != null)
+    ? { ciudad: d.city, region: d.region, pais: d.country, lat: Number(d.latitude), lon: Number(d.longitude) } : null);
+  if (!g) g = await pedir("https://get.geojs.io/v1/ip/geo.json", d => (d && d.latitude)
+    ? { ciudad: d.city, region: d.region, pais: d.country, lat: Number(d.latitude), lon: Number(d.longitude) } : null);
+  if (!g && MODO_DEMO) g = { ciudad: "Tijuana", region: "Baja California", pais: "México", lat: 32.51, lon: -117.04 };
+  if (g) {
+    g.lat = isFinite(g.lat) ? Math.round(g.lat * 100) / 100 : null;
+    g.lon = isFinite(g.lon) ? Math.round(g.lon * 100) / 100 : null;
+    try { sessionStorage.setItem("izma_geo", JSON.stringify(g)); } catch { }
+  }
+  return g;
+}
+function chatVisto() { try { return Number(localStorage.getItem("izma_chat_visto_" + (E.yo ? E.yo.usuario : "")) || 0); } catch { return 0; } }
+function marcarChatVisto(id) { try { if (E.yo && id > chatVisto()) localStorage.setItem("izma_chat_visto_" + E.yo.usuario, String(id)); } catch { } }
+let _latidoListo = false, _latidos = 0;
+async function latido() {
+  if (!E.yo || !E.token || E.previendo) return;
+  const d = detectarDispositivo();
+  const g = await ubicacionAprox();
+  try {
+    const r = await rpc("latido", {
+      p_token: E.token, p_dispositivo: d.dispositivo, p_sistema: d.sistema, p_navegador: d.navegador,
+      p_ciudad: (g && g.ciudad) || null, p_region: (g && g.region) || null, p_pais: (g && g.pais) || null,
+      p_lat: g && g.lat != null ? g.lat : null, p_lon: g && g.lon != null ? g.lon : null,
+      p_vista: E.vista || null, p_chat_visto: chatVisto()
+    });
+    if (!r || !r.ok) return;
+    if (E.yo && r.foto !== undefined) E.yo.foto = r.foto;
+    const antes = E.datos.chatNuevos || 0;
+    E.datos.chatNuevos = E.vista === "chat" ? 0 : (r.chat_nuevos || 0);
+    if (E.datos.chatNuevos !== antes) pintarNav();
+    if (_latidos > 0 && E.datos.chatNuevos > antes && E.vista !== "chat") notificar("💬 Mensaje nuevo en el chat de IZMA");
+    _latidos++;
+  } catch { }
+}
+function iniciarLatido() {
+  latido();
+  if (_latidoListo) return;
+  _latidoListo = true;
+  setInterval(() => { if (document.visibilityState === "visible") latido(); }, 60000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") latido(); });
+}
+function haceCuanto(f) {
+  const s = Math.max(0, Math.round((Date.now() - new Date(f)) / 1000));
+  if (s < 60) return "hace un momento";
+  const m = Math.round(s / 60); if (m < 60) return "hace " + m + " min";
+  const h = Math.round(m / 60); if (h < 24) return "hace " + h + " h";
+  return "hace " + Math.round(h / 24) + " días";
+}
+
+/* ===================== 17. avatares y perfil ===================== */
+function iniciales(n) {
+  return String(n || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0] || "").join("").toUpperCase() || "?";
+}
+function avatar(nombre, foto, tam) {
+  tam = tam || 34;
+  const ini = esc(iniciales(nombre));
+  const est = 'width:' + tam + 'px;height:' + tam + 'px;font-size:' + Math.round(tam * 0.4) + 'px;background:' + colorEspacio(nombre || "");
+  return foto ? '<img class="ava" style="' + est + '" src="' + esc(foto) + '" alt="" data-ini="' + ini + '" onerror="avaFalla(this)">'
+              : '<span class="ava" style="' + est + '">' + ini + "</span>";
+}
+function avaFalla(img) {
+  img.onerror = null;
+  const s = document.createElement("span");
+  s.className = "ava"; s.style.cssText = img.style.cssText; s.textContent = img.dataset.ini || "?";
+  try { img.replaceWith(s); } catch { }
+}
+function etiquetaRol(rol) {
+  return rol === "admin" ? '<span class="etiq-rol">IZMA</span>' : rol === "vendedor" ? '<span class="etiq-rol vend">Vendedor</span>' : "";
+}
+function verPerfilChat(p) {
+  const admin = E.yo && E.yo.rol === "admin";
+  hoja('<div style="text-align:center">' + avatar(p.nombre, p.foto, 84) +
+    '<h2 style="margin:10px 0 4px">' + esc(p.nombre) + "</h2>" +
+    '<div style="margin-bottom:8px">' + (etiquetaRol(p.rol) || '<span class="sello">Cliente</span>') + "</div>" +
+    (p.enLinea ? '<div class="estado-en">🟢 En línea ahora</div>' : '<div class="estado-fuera">No conectado</div>') + "</div>" +
+    (admin && p.id && p.rol === "cliente" ? '<button class="btn lleno claro" style="margin-top:14px" data-ficha-chat="' + esc(p.id) + '">Ver expediente del cliente</button>' : "") +
+    (admin ? '<button class="btn lleno claro" style="margin-top:8px" data-vista="conectados">Ver en el mapa de conectados</button>' : "") +
+    '<button class="btn lleno claro" style="margin-top:8px" data-cerrar>Cerrar</button>');
+  const f = document.querySelector("[data-ficha-chat]");
+  if (f) f.onclick = () => { cerrarHoja(); E.datos.ficha = f.dataset.fichaChat; ir("cliente"); };
+}
+
+/* ===================== 18. chat en grupo ===================== */
+const esTactil = () => (navigator.maxTouchPoints || 0) > 0;
+function chatBurbuja(m) {
+  const yo = !!m.mio, adm = m.rol === "admin";
+  const hora = new Date(m.creado_en).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  const borra = (E.yo && E.yo.rol === "admin") || yo;
+  return '<div class="msg' + (yo ? " yo" : "") + '" data-msg="' + m.id + '">' +
+    (yo ? "" : '<button class="msg-ava" data-perfil-chat="' + esc(m.usuario_id || "") + '" data-nom="' + esc(m.nombre) +
+      '" data-rol="' + esc(m.rol || "") + '" data-foto="' + esc(m.foto || "") + '">' + avatar(m.nombre, m.foto, 32) + "</button>") +
+    '<div class="burbuja' + (adm && !yo ? " admin" : "") + '">' +
+      (yo ? "" : '<div class="msg-nom">' + esc(m.nombre) + " " + etiquetaRol(m.rol) + "</div>") +
+      '<div class="msg-txt">' + esc(m.texto) + "</div>" +
+      '<div class="msg-hora">' + hora + (borra ? ' · <button class="msg-borrar" data-borrar-msg="' + m.id + '">Borrar</button>' : "") + "</div>" +
+    "</div></div>";
+}
+function chatAgregar(lista, abajo) {
+  const caja = $("#chat-msgs"); if (!caja) return;
+  const cerca = caja.scrollHeight - caja.scrollTop - caja.clientHeight < 140;
+  let html = "";
+  lista.forEach(m => {
+    if (E.chat.ids.has(m.id)) return;
+    E.chat.ids.add(m.id);
+    const dia = new Date(m.creado_en).toDateString();
+    if (dia !== E.chat.dia) {
+      E.chat.dia = dia;
+      const hoy = new Date().toDateString(), ayer = new Date(Date.now() - 864e5).toDateString();
+      const txt = dia === hoy ? "Hoy" : dia === ayer ? "Ayer" : new Date(m.creado_en).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+      html += '<div class="chat-dia"><span>' + esc(txt) + "</span></div>";
+    }
+    html += chatBurbuja(m);
+    if (m.id > E.chat.ultimo) E.chat.ultimo = m.id;
+  });
+  const vacio = caja.querySelector(".chat-vacio");
+  if (html) { if (vacio) vacio.remove(); caja.insertAdjacentHTML("beforeend", html); }
+  else if (!E.chat.ids.size && !vacio) caja.innerHTML = '<div class="vacio chat-vacio"><h3>Aún no hay mensajes</h3><p>Sé el primero en saludar 👋</p></div>';
+  if (abajo || cerca) caja.scrollTop = caja.scrollHeight;
+  marcarChatVisto(E.chat.ultimo);
+  if (E.datos.chatNuevos) { E.datos.chatNuevos = 0; pintarNav(); }
+}
+function chatQuitarBorrados(ids) {
+  (ids || []).forEach(id => { const n = document.querySelector('[data-msg="' + id + '"]'); if (n) n.remove(); });
+}
+function chatPintarOnline(lista) {
+  E.chat.online = lista;
+  const c = $("#chat-online"), n = $("#chat-n");
+  if (n) n.textContent = lista.length === 1 ? "1 persona en línea" : lista.length + " personas en línea";
+  if (!c) return;
+  c.innerHTML = lista.length
+    ? lista.map(o => '<button data-perfil-chat="' + esc(o.id) + '" data-nom="' + esc(o.nombre) + '" data-rol="' + esc(o.rol || "") +
+        '" data-foto="' + esc(o.foto || "") + '"><span class="punto-en">' + avatar(o.nombre, o.foto, 40) + '</span><span class="n">' +
+        esc(String(o.nombre || "").split(" ")[0]) + "</span></button>").join("")
+    : '<span class="tenue" style="align-self:center;font-size:13px">Nadie más conectado ahorita</span>';
+}
+async function chatRefrescar(abajo) {
+  if (E.vista !== "chat" || !$("#chat-msgs") || E._chatOcupado || !E.chat) return;
+  E._chatOcupado = true;
+  try {
+    const d = await rpc("chat_leer", { p_token: E.token, p_desde: E.chat.ultimo || 0 });
+    if (d && d.ok) { chatPintarOnline(d.en_linea || []); chatAgregar(d.mensajes || [], abajo); chatQuitarBorrados(d.borrados); }
+  } catch { } finally { E._chatOcupado = false; }
+}
+setInterval(() => { if (document.visibilityState === "visible") chatRefrescar(false); }, 4000);
+async function chatEnviar() {
+  const t = $("#chat-txt"), b = $("#chat-env");
+  const txt = (t.value || "").trim();
+  if (!txt) { t.focus(); return; }
+  b.disabled = true;
+  try {
+    const r = await rpc("chat_enviar", { p_token: E.token, p_texto: txt });
+    if (!r.ok) throw new Error(r.motivo || "No se pudo enviar");
+    t.value = ""; t.style.height = "";
+    await chatRefrescar(true);
+  } catch (err) { aviso(err.message, "mal"); }
+  finally { b.disabled = false; t.focus(); }
+}
+
+VISTAS.chat = async () => {
+  const d = await rpc("chat_leer", { p_token: E.token, p_desde: 0 });
+  if (!d || !d.ok) throw new Error((d && d.motivo) || "No se pudo abrir el chat");
+  E.chat = { ultimo: 0, ids: new Set(), dia: "", online: [] };
+  E.datos.chatNuevos = 0; pintarNav();
+  $("#vista").innerHTML =
+    '<div class="chat-caja">' +
+      '<div class="chat-cab"><div><h2 style="margin:0">💬 Chat IZMA</h2><div class="tenue" id="chat-n" style="font-size:13px"></div></div>' +
+        '<span class="sello verde" style="font-size:11px">En grupo</span></div>' +
+      '<div class="chat-linea" id="chat-online"></div>' +
+      '<div class="chat-msgs" id="chat-msgs"></div>' +
+      '<form class="chat-escribir" id="chat-form" autocomplete="off">' +
+        '<textarea id="chat-txt" rows="1" maxlength="1000" placeholder="Escribe un mensaje…" enterkeyhint="send"></textarea>' +
+        '<button class="btn lleno verde" id="chat-env" type="submit">Enviar</button></form>' +
+    "</div>" +
+    '<p class="tenue" style="font-size:12px;margin:8px 2px 0">Chat en grupo: todos los que están en la app ven los mensajes. Sé respetuoso. Administración puede borrar mensajes.</p>';
+  chatPintarOnline(d.en_linea || []);
+  chatAgregar(d.mensajes || [], true);
+  const t = $("#chat-txt");
+  t.addEventListener("input", () => { t.style.height = "auto"; t.style.height = Math.min(120, t.scrollHeight) + "px"; });
+  t.addEventListener("keydown", ev => { if (ev.key === "Enter" && !ev.shiftKey && !esTactil()) { ev.preventDefault(); chatEnviar(); } });
+  $("#chat-form").onsubmit = ev => { ev.preventDefault(); chatEnviar(); };
+  $(".chat-caja").onclick = async ev => {
+    const p = ev.target.closest("[data-perfil-chat]");
+    if (p) {
+      const id = p.dataset.perfilChat;
+      verPerfilChat({ id, nombre: p.dataset.nom, rol: p.dataset.rol, foto: p.dataset.foto,
+                      enLinea: (E.chat.online || []).some(o => o.id === id) });
+      return;
+    }
+    const bb = ev.target.closest("[data-borrar-msg]");
+    if (bb) {
+      if (!confirm("¿Borrar este mensaje para todos?")) return;
+      try {
+        const r = await rpc("chat_borrar", { p_token: E.token, p_id: Number(bb.dataset.borrarMsg) });
+        if (!r.ok) throw new Error(r.motivo);
+        chatQuitarBorrados([bb.dataset.borrarMsg]);
+      } catch (err) { aviso(err.message, "mal"); }
+    }
+  };
+};
+
+/* ===================== 19. mapa de conectados (admin) ===================== */
+async function cargarLeaflet() {
+  if (window.L && window.L.map) return true;
+  try {
+    if (!document.getElementById("leaflet-css")) {
+      const l = document.createElement("link");
+      l.id = "leaflet-css"; l.rel = "stylesheet";
+      l.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+      document.head.appendChild(l);
+    }
+    await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js");
+    return !!(window.L && window.L.map);
+  } catch { return false; }
+}
+async function mapaConectados(items) {
+  const cont = $("#mapa-con"); if (!cont) return;
+  const ok = await cargarLeaflet();
+  if (!$("#mapa-con")) return;   // ya se cambió de pantalla
+  if (!ok) {
+    cont.style.height = "auto";
+    cont.innerHTML = '<div class="vacio" style="padding:26px"><h3>El mapa no cargó</h3><p>Revisa tu internet. La lista de abajo sí está completa.</p></div>';
+    return;
+  }
+  try { if (E._mapa) { E._mapa.remove(); E._mapa = null; } } catch { }
+  const mapa = L.map(cont, { zoomControl: true, scrollWheelZoom: false });
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(mapa);
+  const grupos = {};
+  items.filter(x => x.lat != null && x.lon != null).forEach(x => {
+    const k = Number(x.lat).toFixed(2) + "," + Number(x.lon).toFixed(2);
+    (grupos[k] = grupos[k] || []).push(x);
+  });
+  const puntos = [];
+  Object.values(grupos).forEach(g => {
+    const en = g.some(x => x.en_linea);
+    const c = [Number(g[0].lat), Number(g[0].lon)];
+    L.circleMarker(c, {
+      radius: 8 + Math.min(12, g.length * 2), weight: 2,
+      color: en ? "#0a7a35" : "#6b7479", fillColor: en ? "#16a34a" : "#9aa3a7", fillOpacity: .85
+    }).addTo(mapa).bindPopup('<b>' + esc(g[0].ciudad || "Ciudad desconocida") + (g[0].region ? ", " + esc(g[0].region) : "") + "</b><br>" +
+      g.map(x => (x.en_linea ? "🟢 " : "⚪ ") + esc(x.nombre) + " " + iconoAparato(x.dispositivo)).join("<br>"));
+    puntos.push(c);
+  });
+  if (puntos.length) mapa.fitBounds(puntos, { padding: [30, 30], maxZoom: 11 });
+  else mapa.setView([23.6, -102.5], 5);
+  E._mapa = mapa;
+  setTimeout(() => { try { mapa.invalidateSize(); } catch { } }, 150);
+}
+VISTAS.conectados = async () => {
+  const horas = E.datos.conHoras || 24;
+  const d = await rpc("admin_conectados", { p_token: E.token, p_horas: horas });
+  if (!d || !d.ok) throw new Error((d && d.motivo) || "No se pudo cargar");
+  const items = d.items || [];
+  const en = items.filter(x => x.en_linea);
+  const cuenta = k => en.filter(x => x.dispositivo === k).length;
+  const filtro = E.datos.conFiltro || "todos";
+  const lista = filtro === "linea" ? en : items;
+  $("#vista").innerHTML =
+    '<div class="tarjeta" style="background:#0B2A18;color:#fff;border:0"><h2 style="margin:0;color:#fff">🟢 Conectados</h2>' +
+      '<p class="tenue" style="color:#CFE6D8;margin:4px 0 0">Quién usa la app, desde qué aparato y de qué ciudad. La ciudad es aproximada (por su conexión a internet, no GPS).</p></div>' +
+    '<div class="tablero">' +
+      '<div class="mosaico"><div class="cifra">' + en.length + "</div><span>en línea ahora</span></div>" +
+      '<div class="mosaico"><div class="cifra">📱 ' + cuenta("celular") + "</div><span>celular</span></div>" +
+      '<div class="mosaico"><div class="cifra">📲 ' + cuenta("tablet") + "</div><span>tablet</span></div>" +
+      '<div class="mosaico"><div class="cifra">💻 ' + cuenta("computadora") + "</div><span>computadora</span></div></div>" +
+    '<div class="filtros">' +
+      [["1", "Última hora"], ["24", "Hoy (24 h)"], ["168", "7 días"]].map(h =>
+        '<button data-conh="' + h[0] + '" aria-current="' + (String(horas) === h[0]) + '">' + h[1] + "</button>").join("") +
+      '<button data-confil="' + (filtro === "linea" ? "todos" : "linea") + '" aria-current="' + (filtro === "linea") + '">Solo en línea</button>' +
+      '<button id="con-ref">↻ Actualizar</button></div>' +
+    '<div class="tarjeta" style="padding:0;overflow:hidden"><div id="mapa-con"></div></div>' +
+    '<div class="tarjeta"><h2 style="margin:0 0 4px">Personas · ' + lista.length + "</h2>" +
+      (lista.length ? lista.map(x =>
+        '<div class="con-fila">' + (x.en_linea ? '<span class="punto-en">' + avatar(x.nombre, x.foto, 42) + "</span>" : avatar(x.nombre, x.foto, 42)) +
+          '<div class="crece"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>' + esc(x.nombre) + "</b>" + etiquetaRol(x.rol) +
+            (x.rol === "cliente" ? '<span class="tenue" style="font-size:12px">' + esc(x.tipo_cliente || "") + "</span>" : "") + "</div>" +
+            '<div class="det">' + iconoAparato(x.dispositivo) + " " + esc(x.dispositivo || "—") +
+              (x.sistema ? " · " + esc(x.sistema) : "") + (x.navegador ? " · " + esc(x.navegador) : "") + "</div>" +
+            '<div class="det">📍 ' + esc([x.ciudad, x.region, x.pais].filter(Boolean).join(", ") || "Ubicación no disponible") + "</div>" +
+            (x.en_linea && x.vista ? '<div class="det">👀 Viendo: ' + esc(x.vista) + "</div>" : "") + "</div>" +
+          '<div style="text-align:right">' + (x.en_linea ? '<div class="estado-en">● En línea</div>' : '<div class="estado-fuera">' + haceCuanto(x.ultimo) + "</div>") +
+            (x.rol === "cliente" ? '<button class="btn claro chico" style="margin-top:6px" data-ficha="' + esc(x.id) + '">Expediente</button>' : "") +
+          "</div></div>").join("")
+        : '<p class="tenue" style="margin:6px 0 0">Nadie se ha conectado en este periodo.</p>') + "</div>";
+  $$("[data-conh]").forEach(b => b.onclick = () => { E.datos.conHoras = Number(b.dataset.conh); pintar(); });
+  $$("[data-confil]").forEach(b => b.onclick = () => { E.datos.conFiltro = b.dataset.confil; pintar(); });
+  $$("[data-ficha]").forEach(b => b.onclick = () => { E.datos.ficha = b.dataset.ficha; ir("cliente"); });
+  $("#con-ref").onclick = () => pintar();
+  mapaConectados(items);
+};
+setInterval(() => {
+  if (E.yo && E.yo.rol === "admin" && E.vista === "conectados" && document.visibilityState === "visible" && !$("#capa").classList.contains("abierta")) pintar();
+}, 45000);
+
 /* ===================== 14. errores visibles ===================== */
 function fallo(msj) {
   const caja = $("#claves-demo");
@@ -5755,13 +6298,26 @@ if ($("#btn-instalar")) {
       "Pon SUPABASE_URL y SUPABASE_ANON al inicio del archivo.</div>";
   }
   if (!E.token) return;
-  try {
-    const s = await rpc("sesion", { p_token: E.token });
-    if (!s.ok) return salirLocal();
-    E.yo = s.usuario; E.config = s.config;
-    if (bioRegistrada() && bioDisponible()) await desbloqueoBio();
-    else arrancarApp();
-  } catch { salirLocal(); }
+  // Si el celular aún no tiene red (al volver de otra app), NO sacar al usuario: reintentar.
+  let s = null;
+  for (let intento = 0; intento < 6 && !s; intento++) {
+    try { s = await rpc("sesion", { p_token: E.token }); }
+    catch {
+      $("#claves-demo").innerHTML = '<div class="mensaje info" style="margin-top:14px">Reconectando… (' + (intento + 1) + ")</div>";
+      await new Promise(r => setTimeout(r, 1200 + intento * 500));
+    }
+  }
+  if (!s) {
+    $("#claves-demo").innerHTML = '<div class="mensaje rojo" style="margin-top:14px"><b>Sin conexión</b><br>Revisa tu internet. Tu sesión sigue guardada; en cuanto regrese la señal entras solo.<br>' +
+      '<button class="btn lleno verde" style="margin-top:8px" onclick="location.reload()">Reintentar</button></div>';
+    window.addEventListener("online", () => location.reload(), { once: true });
+    return;
+  }
+  if (!s.ok) return salirLocal();
+  $("#claves-demo").innerHTML = "";
+  E.yo = s.usuario; E.config = s.config;
+  if (bioRegistrada() && bioDisponible()) await desbloqueoBio();
+  else arrancarApp();
   } catch (err) { fallo(err.message); }
 })();
 </script>
