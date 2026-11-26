@@ -266,6 +266,14 @@ html[data-tema="oscuro"] .gv-cab b{filter:brightness(1.6)}
 .ventas-chips button{display:inline-flex;align-items:center;gap:6px}
 .ventas-chips button[aria-current="true"][style]{background:var(--gv);border-color:var(--gv);color:#fff}
 @media (max-width:520px){.grupo-venta{padding:8px;margin-left:-6px;margin-right:-6px}}
+.rep-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 10px;text-align:center}
+.rep-nav .btn{min-width:44px;font-size:20px;line-height:1}
+.rep-barras{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end}
+.rep-dia{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.rep-col{height:120px;width:100%;max-width:46px;background:var(--suave);border-radius:8px;display:flex;align-items:flex-end;overflow:hidden}
+.rep-col i{display:block;width:100%;background:linear-gradient(180deg,#22C06B,#0B6B3A);border-radius:8px 8px 0 0;min-height:2px}
+.rep-monto{font-size:10.5px;color:var(--tinta-2);white-space:nowrap;min-height:14px}
+.rep-lbl{font-size:11px;color:var(--tinta-2);text-align:center;text-transform:capitalize;line-height:1.2}
 .ticket-img{display:block;width:100%;max-width:400px;margin:0 auto;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.18);border:1px solid var(--linea)}
 .ticket .lin{display:flex;justify-content:space-between;gap:10px;font-family:Inter,sans-serif;font-size:14px;padding:3px 0}
 .ticket .corte{border-top:2px dashed var(--linea);margin-top:12px;padding-top:12px}
@@ -3464,6 +3472,135 @@ function crearVendedoraLocal() {
   };
 }
 
+/* ===== Reportes diario y semanal de LOCAL IZMA (independientes de la bodega) ===== */
+function inicioDia(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function inicioSemana(d) { const x = inicioDia(d); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); return x; }  // lunes
+function reporteLocal(ventas, modo, ref) {
+  const ini = modo === "semana" ? inicioSemana(ref) : inicioDia(ref);
+  const fin = new Date(ini); fin.setDate(fin.getDate() + (modo === "semana" ? 7 : 1));
+  const enRango = ventas.filter(v => { const t = new Date(v.creado_en); return t >= ini && t < fin; });
+  const vig = enRango.filter(v => v.estado !== "cancelada"), can = enRango.filter(v => v.estado === "cancelada");
+  const total = vig.reduce((a, v) => a + Number(v.total || 0), 0);
+  const piezas = vig.reduce((a, v) => a + Number(v.piezas || 0), 0);
+  const porVend = {}, porProd = {}, porDia = [];
+  vig.forEach(v => {
+    const k = v.vendedora || "—";
+    porVend[k] = porVend[k] || { n: 0, total: 0, piezas: 0 };
+    porVend[k].n++; porVend[k].total += Number(v.total || 0); porVend[k].piezas += Number(v.piezas || 0);
+    (v.detalle || []).forEach(x => {
+      const pk = x.titulo || "—";
+      porProd[pk] = porProd[pk] || { piezas: 0, total: 0 };
+      porProd[pk].piezas += Number(x.cantidad || 0); porProd[pk].total += Number(x.cantidad || 0) * Number(x.precio || 0);
+    });
+  });
+  if (modo === "semana") for (let i = 0; i < 7; i++) {
+    const d0 = new Date(ini); d0.setDate(d0.getDate() + i); const d1 = new Date(d0); d1.setDate(d1.getDate() + 1);
+    const vs = vig.filter(v => { const t = new Date(v.creado_en); return t >= d0 && t < d1; });
+    porDia.push({ dia: d0, n: vs.length, total: vs.reduce((a, v) => a + Number(v.total || 0), 0) });
+  }
+  return { ini, fin, ventas: vig, n: vig.length, total, piezas, promedio: vig.length ? total / vig.length : 0,
+           canceladas: can.length, montoCancelado: can.reduce((a, v) => a + Number(v.total || 0), 0),
+           porVend: Object.entries(porVend).sort((a, b) => b[1].total - a[1].total),
+           porProd: Object.entries(porProd).sort((a, b) => b[1].piezas - a[1].piezas || b[1].total - a[1].total),
+           porDia };
+}
+function tituloRango(r, modo) {
+  const f = d => d.toLocaleDateString("es-MX", { weekday: modo === "dia" ? "long" : undefined, day: "numeric", month: "long", year: "numeric" });
+  if (modo === "dia") return f(r.ini);
+  const u = new Date(r.fin); u.setDate(u.getDate() - 1);
+  return "Semana del " + r.ini.toLocaleDateString("es-MX", { day: "numeric", month: "short" }) + " al " + u.toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+}
+function textoReporte(r, modo) {
+  return "📊 Reporte " + (modo === "dia" ? "diario" : "semanal") + " · " + NEGOCIO_LOCAL() + "\n" + tituloRango(r, modo) + "\n\n" +
+    "Venta: " + dinero(r.total) + "\nVentas: " + r.n + "\nPiezas: " + r.piezas + "\nTicket promedio: " + dinero(r.promedio) +
+    (r.canceladas ? "\nCanceladas: " + r.canceladas + " (" + dinero(r.montoCancelado) + ")" : "") +
+    (r.porVend.length ? "\n\nPor vendedora:\n" + r.porVend.map(([k, x]) => "• " + k + ": " + dinero(x.total) + " (" + x.n + " ventas)").join("\n") : "") +
+    (r.porDia.length ? "\n\nPor día:\n" + r.porDia.map(d => "• " + d.dia.toLocaleDateString("es-MX", { weekday: "short", day: "numeric" }) + ": " + dinero(d.total) + " (" + d.n + ")").join("\n") : "") +
+    (r.porProd.length ? "\n\nLo más vendido:\n" + r.porProd.slice(0, 5).map(([k, x]) => "• " + k + ": " + x.piezas + " pzas · " + dinero(x.total)).join("\n") : "");
+}
+function csvReporte(r) {
+  const q = s => '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"';
+  const filas = [["Folio", "Fecha", "Hora", "Vendedora", "Cliente", "Piezas", "Total", "Detalle"]];
+  r.ventas.slice().sort((a, b) => String(a.creado_en).localeCompare(String(b.creado_en))).forEach(v => {
+    const t = new Date(v.creado_en);
+    filas.push([v.folio || "", t.toLocaleDateString("es-MX"), t.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
+      v.vendedora || "", v.cliente || "", v.piezas || 0, Number(v.total || 0).toFixed(2),
+      (v.detalle || []).map(x => x.cantidad + "x " + x.titulo + " @" + x.precio).join("; ")]);
+  });
+  filas.push([]); filas.push(["TOTAL", "", "", "", "", r.piezas, r.total.toFixed(2), ""]);
+  return "\ufeff" + filas.map(f => f.map(q).join(",")).join("\r\n");
+}
+function htmlReporteLocal(ventas) {
+  const modo = E.datos.repModo || "dia";
+  const ref = E.datos.repFecha ? new Date(E.datos.repFecha) : new Date();
+  const r = reporteLocal(ventas, modo, ref);
+  // comparación con el periodo anterior
+  const antRef = new Date(r.ini); antRef.setDate(antRef.getDate() - (modo === "semana" ? 7 : 1));
+  const ant = reporteLocal(ventas, modo, antRef);
+  const dif = ant.total ? Math.round((r.total - ant.total) / ant.total * 100) : null;
+  const esActual = modo === "semana" ? inicioSemana(new Date()).getTime() === r.ini.getTime() : inicioDia(new Date()).getTime() === r.ini.getTime();
+  const maxDia = Math.max(1, ...r.porDia.map(d => d.total));
+  return '<div class="tarjeta rep-local">' +
+    '<div class="fila entre envolver"><h2 style="margin:0">📊 Reporte de ' + esc(NEGOCIO_LOCAL()) + "</h2>" +
+      '<span class="sello verde">Solo ventas del local · no incluye bodega</span></div>' +
+    '<div class="filtros" style="margin:10px 0 6px"><button data-rep-modo="dia" aria-current="' + (modo === "dia") + '">Diario</button>' +
+      '<button data-rep-modo="semana" aria-current="' + (modo === "semana") + '">Semanal</button></div>' +
+    '<div class="rep-nav"><button class="btn claro chico" data-rep-mover="-1" aria-label="Anterior">‹</button>' +
+      "<b>" + esc((t => t.charAt(0).toUpperCase() + t.slice(1))(tituloRango(r, modo))) + "</b>" +
+      '<button class="btn claro chico" data-rep-mover="1" aria-label="Siguiente"' + (esActual ? " disabled" : "") + ">›</button></div>" +
+    (esActual ? "" : '<div style="text-align:center;margin:-4px 0 8px"><button class="btn claro chico" data-rep-hoy>Ir a ' + (modo === "dia" ? "hoy" : "esta semana") + "</button></div>") +
+    '<div class="tablero">' +
+      '<div class="mosaico"><div class="cifra">' + dinero(r.total) + "</div><span>venta" +
+        (dif !== null ? ' · <b style="color:' + (dif >= 0 ? "var(--verde)" : "var(--sello)") + '">' + (dif >= 0 ? "▲ " : "▼ ") + Math.abs(dif) + "%</b> vs " + (modo === "dia" ? "día" : "semana") + " anterior" : "") + "</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + r.n + "</div><span>ventas</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + r.piezas + "</div><span>piezas</span></div>" +
+      '<div class="mosaico"><div class="cifra">' + dinero(r.promedio) + "</div><span>ticket promedio</span></div></div>" +
+    (r.canceladas ? '<div class="mensaje rojo" style="margin-top:0">' + r.canceladas + " venta(s) cancelada(s) por " + dinero(r.montoCancelado) + " (no se suman).</div>" : "") +
+    (modo === "semana" ? '<h3 style="margin:14px 0 6px">Por día</h3><div class="rep-barras">' + r.porDia.map(d =>
+      '<div class="rep-dia"><div class="rep-monto num">' + (d.total ? dinero(d.total).replace(".00", "") : "") + '</div>' +
+        '<div class="rep-col"><i style="height:' + Math.round(d.total / maxDia * 100) + '%"></i></div>' +
+        '<div class="rep-lbl">' + d.dia.toLocaleDateString("es-MX", { weekday: "short" }).replace(".", "") + "<br>" + d.dia.getDate() + "</div></div>").join("") + "</div>" : "") +
+    '<h3 style="margin:14px 0 6px">Por vendedora</h3>' +
+    (r.porVend.length ? r.porVend.map(([k, x]) => '<div class="renglon"><div class="crece"><b>' + esc(k) + '</b><div class="tenue">' + x.n + " ventas · " + x.piezas + " piezas</div></div>" +
+      '<div class="monto num">' + dinero(x.total) + "</div></div>").join("") : '<p class="tenue" style="margin:0">Sin ventas en este periodo.</p>') +
+    (r.porProd.length ? '<h3 style="margin:14px 0 6px">Lo más vendido</h3>' + r.porProd.slice(0, 10).map(([k, x], i) =>
+      '<div class="renglon"><div class="crece"><b>' + (i + 1) + ". " + esc(k) + '</b><div class="tenue">' + x.piezas + " piezas</div></div>" +
+      '<div class="monto num">' + dinero(x.total) + "</div></div>").join("") : "") +
+    (r.ventas.length ? '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Ver las ' + r.n + " ventas</summary>" +
+      r.ventas.map(v => '<div class="renglon"><div class="crece"><b>' + esc(v.folio || "venta") + '</b><div class="tenue">' + fecha(v.creado_en) +
+        " · " + esc(v.vendedora || "—") + (v.cliente ? " · 👤 " + esc(v.cliente) : "") + " · " + (v.piezas || 0) + " pzas</div></div>" +
+        '<div class="monto num">' + dinero(v.total) + "</div></div>").join("") + "</details>" : "") +
+    '<div class="fila envolver linea-arriba" style="margin-top:12px">' +
+      '<button class="btn verde chico" data-rep-copiar>📋 Copiar para WhatsApp</button>' +
+      '<button class="btn claro chico" data-rep-csv>⬇️ Descargar Excel (CSV)</button></div>' +
+  "</div>";
+}
+function enlazarReporteLocal(ventas) {
+  $$("[data-rep-modo]").forEach(b => b.onclick = () => { E.datos.repModo = b.dataset.repModo; pintar(); });
+  $$("[data-rep-mover]").forEach(b => b.onclick = () => {
+    const modo = E.datos.repModo || "dia";
+    const d = E.datos.repFecha ? new Date(E.datos.repFecha) : new Date();
+    d.setDate(d.getDate() + Number(b.dataset.repMover) * (modo === "semana" ? 7 : 1));
+    if (d > new Date()) return;
+    E.datos.repFecha = d.toISOString(); pintar();
+  });
+  $$("[data-rep-hoy]").forEach(b => b.onclick = () => { E.datos.repFecha = null; pintar(); });
+  const modo = () => E.datos.repModo || "dia";
+  const rep = () => reporteLocal(ventas, modo(), E.datos.repFecha ? new Date(E.datos.repFecha) : new Date());
+  $$("[data-rep-copiar]").forEach(b => b.onclick = async () => {
+    const t = textoReporte(rep(), modo());
+    try { await navigator.clipboard.writeText(t); aviso("Reporte copiado ✓ Pégalo en WhatsApp", "bien"); }
+    catch { hoja('<h2>Reporte</h2><textarea style="width:100%;height:50vh">' + esc(t) + '</textarea><button class="btn lleno claro" data-cerrar>Cerrar</button>'); }
+  });
+  $$("[data-rep-csv]").forEach(b => b.onclick = () => {
+    const r = rep();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csvReporte(r)], { type: "text/csv;charset=utf-8" }));
+    a.download = "Reporte-local-" + (modo() === "dia" ? "dia-" : "semana-") + r.ini.toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  });
+}
+
 VISTAS.tienda_local = async () => {
   const tab = E.datos.tlTab || "hoy";
   const vent = await rpc("ventas_local", { p_token: E.token });
@@ -3496,7 +3633,7 @@ VISTAS.tienda_local = async () => {
       '<div class="monto num"' + (cancel ? ' style="text-decoration:line-through"' : "") + ">" + dinero(v.total) + "</div></div>";
   };
 
-  const tabs = [["hoy", "Ventas del día"], ["inventario", "Inventario"], ["movimiento", "Todo el movimiento"], ["vendedoras", "Vendedoras"]];
+  const tabs = [["hoy", "Ventas del día"], ["reportes", "📊 Reportes"], ["inventario", "Inventario"], ["movimiento", "Todo el movimiento"], ["vendedoras", "Vendedoras"]];
 
   $("#vista").innerHTML =
     '<div class="tarjeta" style="background:#0B2A18;color:#fff;border:0"><h2 style="margin:0;color:#fff">' + esc(NEGOCIO_LOCAL()) + "</h2>" +
@@ -3507,7 +3644,8 @@ VISTAS.tienda_local = async () => {
       '<div class="mosaico"><div class="cifra">' + dinero(totMes) + "</div><span>venta del mes</span></div>" +
       '<div class="mosaico"><div class="cifra">' + piezasInv + "</div><span>piezas en existencia</span></div></div>" +
     '<div class="filtros">' + tabs.map(t => '<button data-tl="' + t[0] + '" aria-current="' + (tab === t[0]) + '">' + t[1] + "</button>").join("") + "</div>" +
-    (tab === "inventario"
+    (tab === "reportes" ? htmlReporteLocal(ventas)
+      : tab === "inventario"
       ? '<div class="tarjeta"><div class="fila entre envolver"><h2 style="margin:0">Inventario · ' + inventario.length + " productos</h2>" +
           '<button class="btn kraft chico" id="tl-subir">Subir producto</button></div>' +
         '<p class="tenue" style="margin:4px 0 8px">Valor en existencia: ' + dinero(valInv) + ". Solo administración puede subir, editar o eliminar.</p>" +
@@ -3539,6 +3677,7 @@ VISTAS.tienda_local = async () => {
         (delDia.length ? delDia.map(ventaRow).join("") : '<p class="tenue" style="margin:0">Hoy no hay ventas todavía.</p>') + "</div>");
 
   $$("[data-tl]").forEach(b => b.onclick = () => { E.datos.tlTab = b.dataset.tl; pintar(); });
+  if (tab === "reportes") enlazarReporteLocal(ventas);
   $$("[data-vercomo]").forEach(b => b.onclick = () => verComo(b.dataset.vercomo, b.dataset.comorol));
   $$("[data-vend-editar]").forEach(b => b.onclick = () => {
     const v = (vendedoras || []).find(x => x.id === b.dataset.vendEditar);
