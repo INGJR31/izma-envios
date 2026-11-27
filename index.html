@@ -283,6 +283,11 @@ html[data-tema="oscuro"] .gv-cab b{filter:brightness(1.6)}
 .tallas-sel button[aria-pressed="true"]{border-color:#0B6B3A;background:#0B6B3A;color:#fff}
 .tallas-sel button[aria-pressed="true"] small{color:#CFF5DE}
 .tallas-sel button:disabled{opacity:.45;text-decoration:line-through}
+.barra-atras{max-width:1080px;margin:0 auto;padding:10px 14px 0;position:relative;z-index:2}
+.barra-atras[hidden]{display:none}
+.barra-atras button{border:1px solid var(--linea);background:var(--tarjeta);color:var(--tinta);font:600 15px Inter,sans-serif;
+  padding:8px 16px 8px 12px;border-radius:999px;box-shadow:var(--sombra);display:inline-flex;align-items:center;gap:4px;min-height:40px}
+.barra-atras button:active{transform:scale(.97)}
 .ticket-img{display:block;width:100%;max-width:400px;margin:0 auto;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.18);border:1px solid var(--linea)}
 .ticket .lin{display:flex;justify-content:space-between;gap:10px;font-family:Inter,sans-serif;font-size:14px;padding:3px 0}
 .ticket .corte{border-top:2px dashed var(--linea);margin-top:12px;padding-top:12px}
@@ -536,6 +541,7 @@ html[data-tema="oscuro"] .gps-tag{background:#172554;color:#93C5FD}
     </div>
     <nav class="nav" id="nav"></nav>
   </header>
+  <div class="barra-atras" id="barra-atras" hidden><button type="button" data-atras>‹ Atrás</button></div>
   <div id="aviso-perfil"></div>
   <main id="vista"><div class="cargando">Cargando…</div></main>
   <footer class="pie"><b>App creada por Ing. Francisco Jared Lara Rguez</b>Para consultas o reportar un incidente en la app: <a href="https://wa.me/529181255735" target="_blank" rel="noopener">918-125-5735</a> <span style="opacity:.6">· v20261125-k</span><br><a href="#" data-terminos>Términos y condiciones · Aviso de privacidad</a></footer>
@@ -585,8 +591,55 @@ function aviso(texto, tipo = "") {
   $("#avisos").appendChild(d);
   setTimeout(() => d.remove(), 4200);
 }
-function hoja(html) { $("#hoja").innerHTML = html; $("#capa").classList.add("abierta"); }
-function cerrarHoja() { $("#capa").classList.remove("abierta"); $("#hoja").innerHTML = ""; }
+/* ===== Navegación con el botón ATRÁS del celular =====
+   Cada pantalla y cada ventanita se guardan en el historial, así "atrás" regresa
+   (cierra la ventanita o vuelve a la pantalla anterior) en vez de cerrar la app. */
+let _hojaEnHist = false, _ultAtras = 0;
+function histPoner(estado) { try { history.pushState(Object.assign({ izma: 1 }, estado), ""); } catch { } }
+function histCambiar(estado) { try { history.replaceState(Object.assign({}, history.state || {}, { izma: 1 }, estado), ""); } catch { } }
+function hoja(html) {
+  html = String(html).replace(/>\s*Cerrar\s*<\/button>/g, ">‹ Regresar</button>");
+  $("#hoja").innerHTML = html; $("#capa").classList.add("abierta");
+  if (!_hojaEnHist && E.yo) { histPoner({ t: "hoja", v: E.vista }); _hojaEnHist = true; }
+}
+function cerrarHoja() {
+  $("#capa").classList.remove("abierta"); $("#hoja").innerHTML = "";
+  // cerrada con su botón: esa entrada del historial queda como la misma pantalla
+  if (_hojaEnHist) { _hojaEnHist = false; histCambiar({ t: "v", v: E.vista, dup: 1 }); }
+}
+window.addEventListener("popstate", ev => {
+  if (!E.yo) return;
+  const st = ev.state || {};
+  if ($("#capa").classList.contains("abierta")) {
+    if (E.forzandoPin) { histPoner({ t: "hoja", v: E.vista }); return; }
+    _hojaEnHist = false;
+    $("#capa").classList.remove("abierta"); $("#hoja").innerHTML = "";
+    if (st.t === "v" && st.v && st.v !== E.vista && VISTAS[st.v]) { E.vista = st.v; pintarNav(); pintar(st.y || 0); }
+    return;
+  }
+  if (st.izma && st.t === "v" && st.v && VISTAS[st.v] && vistasPermitidas().includes(st.v)) {
+    if (st.v === E.vista) { history.back(); return; }        // entrada repetida: seguir hacia atrás
+    E.vista = st.v; pintarNav(); pintar(typeof st.y === "number" ? st.y : 0);
+    return;
+  }
+  if (st.izma && st.t === "hoja") { history.back(); return; }   // ventanita que ya se cerró
+  // Llegó al inicio: pedir confirmación para salir
+  if (Date.now() - _ultAtras < 2500) { history.back(); return; }
+  _ultAtras = Date.now();
+  histPoner({ t: "v", v: E.vista });
+  aviso("Presiona atrás otra vez para salir de la app");
+});
+function vistaInicio() { return E.yo ? (yoSoyPosLocal() ? "pos" : { cliente: "bodega", vendedor: "publicar", admin: "resumen" }[E.yo.rol]) : ""; }
+function atras() {
+  if ($("#capa").classList.contains("abierta") && !E.forzandoPin) { cerrarHoja(); return; }
+  const st = history.state || {};
+  if (st.izma && E.vista !== vistaInicio()) history.back();
+  else if (E.vista !== vistaInicio()) ir(vistaInicio());
+}
+function pintarAtras() {
+  const b = $("#barra-atras"); if (!b) return;
+  b.hidden = !E.yo || E.vista === vistaInicio();
+}
 $("#capa").addEventListener("click", e => { if (e.target.id === "capa" && !E.forzandoPin) cerrarHoja(); });
 function verImagen(url) {
   hoja('<img src="' + esc(url) + '" alt="" style="width:100%;border-radius:10px;margin-bottom:12px">' +
@@ -3006,11 +3059,18 @@ document.addEventListener("click", async e => {
     return;
   }
   if (e.target.closest("[data-terminos]")) { e.preventDefault(); verTerminos(); return; }
+  if (e.target.closest("[data-atras]")) { atras(); return; }
   if (e.target.closest("[data-cerrar]") && !E.forzandoPin) cerrarHoja();
   const img = e.target.closest("[data-ver]");
   if (img) verImagen(img.dataset.ver);
 });
-function ir(vista) { E.vista = vista; pintarNav(); pintar(); }
+function ir(vista) {
+  if (vista !== E.vista && E.yo) {
+    histCambiar({ y: window.scrollY });                // recordar dónde ibas en esta pantalla
+    histPoner({ t: "v", v: vista });
+  }
+  E.vista = vista; pintarNav(); pintar();
+}
 
 /* Reautenticación: todo lo que mueve dinero pide el PIN otra vez */
 async function pedirPin(para) {
@@ -3112,6 +3172,8 @@ function arrancarApp() {
   pintarBannerPreview();
   const esCli = E.yo.rol === "cliente" && !E.previendo && !yoSoyPosLocal();
   // El cliente: primero se revisa su perfil y sus términos, luego se pinta (así no se brinca el bloqueo)
+  try { history.replaceState({ izma: 1, t: "raiz" }, ""); history.pushState({ izma: 1, t: "v", v: E.vista }, ""); } catch { }
+  _hojaEnHist = false;
   (esCli ? refrescarPerfil() : Promise.resolve()).then(() => {
     pintar(yLugar);
     iniciarLatido();
@@ -3161,6 +3223,7 @@ async function pintar(irAY) {
   v.style.minHeight = "";
   E._pintada = E.vista;
   pintarAvisoPerfil();
+  pintarAtras();
   if (typeof irAY === "number") window.scrollTo(0, irAY);
   else if (mismo) window.scrollTo(0, y);
   else window.scrollTo(0, 0);
