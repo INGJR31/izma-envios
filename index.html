@@ -4125,9 +4125,10 @@ function rAdmin(){
     ['inventario','box','#e09a00','Menú y precios','Editar menú, precios, opciones e inventario',low?low+' por acabarse':'Existencias en orden',low],
     ['conteo','box','#8a5a00','Inventario','Barra y bodega · conteo diario',(S.conteos.find(x=>x.id===today()&&x.kind==='inv')?'Conteo de hoy hecho':'Conteo de hoy pendiente')+(invLowList().length?' · '+invLowList().length+' por surtir':''),invLowList().length>0],
     ['personal','people','#2e8b57','Personal y mesas','Usuarios, PIN, roles, reparto de mesas',act+' usuarios · '+S.tables.length+' mesas'],
-    ['kds:cocina','chef','#f2602e','Monitor cocina','Pedidos de alimentos en vivo',S.orders.filter(o=>o.area==='cocina'&&o.status!=='entregado').length+' pedidos activos'],
-    ['kds:barra','bar','#7b3fa0','Monitor barra','Bebidas, cervezas y micheladas',S.orders.filter(o=>o.area==='barra'&&o.status!=='entregado').length+' pedidos activos'],
-    ['impresora','print','#333f4f','Conectar impresora','Bluetooth, USB o Windows · probar tickets',(METHS[pr.method]||METHS.pdf).t+' · '+(prOk()?'lista':'sin conectar')],
+    ...(kdsOn()?[['kds:cocina','chef','#f2602e','Monitor cocina','Pedidos de alimentos en vivo',S.orders.filter(o=>o.area==='cocina'&&o.status!=='entregado').length+' pedidos activos'],
+    ['kds:barra','bar','#7b3fa0','Monitor barra','Bebidas, cervezas y micheladas',S.orders.filter(o=>o.area==='barra'&&o.status!=='entregado').length+' pedidos activos']]:[]),
+    ['caja','cash','#1f7a4d','Caja','Cobrar cuentas y recibir cortes de meseros',S.tabs.filter(t=>t.bill&&t.items.length).length+' piden la cuenta · '+fmt(cashNow())+' en caja'],
+    ['impresora','print','#333f4f','Impresora y comandas',kdsOn()?'Bluetooth, USB o Windows · probar tickets':'Comandas de cocina y barra, tickets e impresora de caja',(METHS[pr.method]||METHS.pdf).t+' · '+(prOk()?'lista':'sin conectar')+(pr.station?' · impresora de caja':'')],
     ['mesas','palm','#0a3a66','Salón','Mesas y cuentas abiertas',open+' cuentas abiertas']];
   $('#tiles').innerHTML=T.map(([k,ic,col,t,d,st,al])=>'<button class="tile" data-act="nav" data-id="'+k+'"><span class="ico" style="background:'+col+'">'+svg(ic)+'</span><b>'+t+'</b><span>'+d+'</span><em class="num'+(al?' al':'')+'">'+esc(st)+'</em></button>').join('');
 }
