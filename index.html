@@ -3016,6 +3016,49 @@ header{background:color-mix(in srgb,var(--panel) 80%,transparent)!important;-web
 body:has(#mbar.on) .instbar{bottom:84px}
 .isteps{margin:6px 0 0;padding:0;list-style:none;counter-reset:s}.isteps li{counter-increment:s;position:relative;padding:6px 0 10px 40px}.isteps li::before{content:counter(s);position:absolute;left:0;top:2px;width:28px;height:28px;border-radius:50%;background:var(--sun);color:var(--goldink);font-weight:700;display:grid;place-items:center}
 .ikey{display:inline-flex;align-items:center;gap:4px;border:1.5px solid var(--line);border-radius:8px;padding:1px 8px;background:var(--soft);font-weight:500;vertical-align:middle}
+
+/* ---- tamaño compacto (celular y tablet) ---- */
+:root[data-size=s] header img{height:40px}
+:root[data-size=s] .hrow{gap:4px 10px;padding-top:4px}
+:root[data-size=s] nav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;max-width:100%;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+:root[data-size=s] nav::-webkit-scrollbar{display:none}
+:root[data-size=s] nav button{min-height:36px;padding:0 11px;font-size:14px;flex:none}
+:root[data-size=s] nav button svg{width:16px;height:16px}
+:root[data-size=s] nav .me .av{width:22px!important;height:22px!important;font-size:11px!important}
+:root[data-size=s] main{padding:10px 10px 16px}
+:root[data-size=s] .top h2{font-size:24px}
+:root[data-size=s] .btn{min-height:38px;padding:0 12px;font-size:14.5px;border-radius:10px}
+:root[data-size=s] .btn.big{min-height:44px;font-size:15.5px}
+:root[data-size=s] .chip{min-height:34px;padding:0 11px 0 8px;font-size:14px}
+:root[data-size=s] .grid{grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:7px}
+:root[data-size=s] .prod{min-height:92px;padding:8px 8px 8px 9px;border-radius:14px;gap:2px}
+:root[data-size=s] .prod b{font-size:13.5px;line-height:1.2}
+:root[data-size=s] .prod i{font-size:11.5px}
+:root[data-size=s] .prod .pr{font-size:14.5px}
+:root[data-size=s] .prod .ico,:root[data-size=s] .prod .ph{width:30px!important;height:30px!important;border-radius:9px}
+:root[data-size=s] .prod .ico svg{width:16px;height:16px}
+:root[data-size=s] .prod .n{top:6px;right:6px;font-size:12px;min-width:20px}
+:root[data-size=s] .pnote{width:30px;height:30px;right:6px;bottom:6px;border-radius:9px}
+:root[data-size=s] .pnote svg{width:14px;height:14px}
+:root[data-size=s] .floor{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px 8px}
+:root[data-size=s] .mesa .g{max-width:116px}
+:root[data-size=s] .mesa .c b{font-size:17px}
+:root[data-size=s] .mesa .c .amt{font-size:12.5px}
+:root[data-size=s] .mesa .c small,:root[data-size=s] .mesa .c .cn{font-size:10px}
+:root[data-size=s] .mesa .w{font-size:11.5px;padding:0 8px}
+:root[data-size=s] .mesa .tag{font-size:10.5px;padding:1px 6px}
+:root[data-size=s] .kpis{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px}
+:root[data-size=s] .kpi{padding:10px;border-radius:14px}
+:root[data-size=s] .kpi .num{font-size:20px}
+:root[data-size=s] .card{padding:12px}
+:root[data-size=s] .ibtn{min-width:34px;min-height:34px}
+:root[data-size=s] .mbar.on{padding:7px 10px;gap:6px}
+:root[data-size=s] .mbar strong{font-size:18px}
+:root[data-size=s] .legend{font-size:12px;gap:10px}
+:root[data-size=s][data-lay=tab] .btn,:root[data-size=s][data-lay=tab] .chip,:root[data-size=s][data-lay=tab] nav button{min-height:40px;font-size:15px}
+:root[data-size=s][data-lay=tab] .prod{min-height:100px}
+@media(min-width:700px){:root[data-size=s] .grid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr))}:root[data-size=s] .floor{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}:root[data-size=s] .mesa .g{max-width:130px}}
+:root[data-size=l] body{font-size:17px}:root[data-size=l] .prod b{font-size:17px}:root[data-size=l] .prod .pr{font-size:19px}:root[data-size=l] .btn,:root[data-size=l] nav button{min-height:50px;font-size:17px}
 </style>
 <style id="pageSize"></style>
 <script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
@@ -3405,8 +3448,9 @@ function orderDiff(prev,next){if(!S.me||!prev)return;const pm=new Map(prev.map(o
     if(p&&p.status!=='listo'&&o.status==='listo'&&o.waiter===S.me){beep(2);toast(o.place+': pedido listo en '+AREAS[o.area].toLowerCase())}}}
 
 /* ---------- pantalla ---------- */
-const prefs={lay:ls.get('lcb-lay')||'auto',theme:ls.get('lcb-theme')||'auto'};let themeSet=false;
+const prefs={lay:ls.get('lcb-lay')||'auto',theme:ls.get('lcb-theme')||'auto',size:ls.get('lcb-size')||'auto'};let themeSet=false;
 function applyPrefs(){const r=document.documentElement;if(prefs.lay==='auto')delete r.dataset.lay;else r.dataset.lay=prefs.lay;
+  const sz=prefs.size==='auto'?(Math.min(screen.width,screen.height)<900||innerWidth<1100?'s':'m'):prefs.size;r.dataset.size=sz;
   if(prefs.theme==='auto'){if(themeSet){delete r.dataset.theme;themeSet=false}}else{r.dataset.theme=prefs.theme;themeSet=true}}
 applyPrefs();
 $('#bgblur').style.backgroundImage='url('+LOGOW+')';
@@ -3526,11 +3570,12 @@ function myAccount(){const u=me();if(!u)return;if(u.role==='soporte'){modal('<h2
   modal('<h2>'+esc(u.name)+'</h2><p style="margin:0 0 10px">'+ROLES[u.role]+'</p>'+
    (bioOK()?(has?'<p>Huella o rostro activo en este dispositivo.</p><div class="row"><button class="btn" id="bioOff">Quitar de este dispositivo</button></div>':'<button class="btn navy biob" id="bioOn">'+svg('finger')+' Activar huella o rostro aquí</button><p class="hint">Usa el lector de huella o la cámara de este celular o computadora. Cada dispositivo se activa por separado.</p>'):'<p class="hint">Este navegador o esta página no permiten huella ni rostro. Sigue usando tu PIN.</p>')+
    '<div class="prefs"><h4>Vista de pantalla (este dispositivo)</h4><div class="seg c4" id="pLay">'+[['auto','Automática'],['cel','Celular'],['tab','Tablet'],['pc','Computadora']].map(([k,l])=>'<button type="button" data-v="'+k+'" aria-pressed="'+(prefs.lay===k)+'">'+l+'</button>').join('')+'</div>'+
+   '<h4>Tamaño de la pantalla</h4><div class="seg c4" id="pSize">'+[['auto','Automático'],['s','Compacto'],['m','Normal'],['l','Grande']].map(([k,l])=>'<button type="button" data-v="'+k+'" aria-pressed="'+(prefs.size===k)+'">'+l+'</button>').join('')+'</div>'+
    '<h4>Tema</h4><div class="seg c4" id="pTheme" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+[['auto','Automático'],['light','Claro'],['dark','Oscuro']].map(([k,l])=>'<button type="button" data-v="'+k+'" aria-pressed="'+(prefs.theme===k)+'">'+l+'</button>').join('')+'</div></div>'+
    (canInstall()?'<button class="btn gold" data-act="install" style="width:100%;margin-top:12px">'+svg('send')+' Instalar app en este celular</button>':'')+
    '<div class="row"><button class="btn" data-act="myPin">Cambiar mi PIN</button><button class="btn red" data-act="logout">Salir</button></div>');
   const sp=(id,key,ls_)=>{$(id).onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;prefs[key]=b.dataset.v;ls.set(ls_,b.dataset.v);applyPrefs();$$(id+' [data-v]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===prefs[key]));render()}};
-  sp('#pLay','lay','lcb-lay');sp('#pTheme','theme','lcb-theme');
+  sp('#pLay','lay','lcb-lay');sp('#pTheme','theme','lcb-theme');sp('#pSize','size','lcb-size');
   const on=$('#bioOn'),off=$('#bioOff');on&&(on.onclick=()=>bioRegister(u));off&&(off.onclick=()=>{const m=bioMap();delete m[u.id];ls.set('lcb-bio',JSON.stringify(m));closeModal();toast('Huella quitada de este dispositivo')});
 }
 
